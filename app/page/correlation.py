@@ -13,10 +13,13 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
     SESSION = 'SessionNumber'
     PAGELINK = 'PageLocation'
     PAGESEQ = 'PageSequenceInSession'
+    EVENTTIMESTAMP = 'EventTimestamp'
+
     LEVELS = LEVEL
 
     ts = time.time()
-    sessionall = pd.read_csv(filepath, usecols=[SESSION, PAGESEQ, PAGELINK]).sort_values([SESSION, PAGESEQ], ascending=[1,1])
+    sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, PAGELINK]).sort_values([SESSION, PAGESEQ], ascending=[1,1])
+
     #sessionall = DataFrame(df, columns=[SESSION, PAGESEQ, PAGELINK]).sort_values([SESSION, PAGESEQ], ascending=[1,1])
 
     #只保留網址中問號前的資訊
@@ -36,9 +39,14 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
         pool[start_page] += score
 
     for count, line in enumerate(sessionall.values):
-        session = line[0]
-        seq = line[1]
-        start_page = line[2]
+        session = line[3]
+        seq = line[2]
+        start_page = line[0]
+        #print(line)
+
+        if start_page.find("https") == -1:
+            continue
+
         for level in range(0, LEVELS):
             score = (LEVELS - level) / LEVELS
 
