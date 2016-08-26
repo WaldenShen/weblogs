@@ -66,19 +66,22 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
 
                 break  # 只要到EXIT後就不繼續level
 
-    print(len(pagecount))
-
     pagecount.setdefault(EXIT, 0)
 
     pageall = pagecount.keys()
-    correlationdf = DataFrame(0, index=pageall, columns=pageall)
+    #correlationdf = DataFrame(0, index=pageall, columns=pageall)
 
+    results = {}
     for start_page, exit_pages in pagedict.items():
         for exit_page, count in exit_pages.items():
-            correlationdf.ix[start_page, exit_page] = count / pagecount[start_page]
+            #correlationdf.ix[start_page, exit_page] = count / pagecount[start_page]
+            if count > 0:
+                results.setdefault(start_page, {}).setdefault(exit_page, count / pagecount[start_page])
 
     #correlationdf.to_csv(OUTPUTPATH, sep=TAB)
-    return correlationdf
+    #return correlationdf
+
+    return results
 
 if __name__ == "__main__":
     Correlation("/Users/yehben/Desktop/Page_expose.txt","/Users/yehben/Desktop/output.csv",3)

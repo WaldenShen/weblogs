@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import operator
 
 import luigi
 import logging
@@ -114,10 +115,16 @@ class CorrelationPage(RawPath):
 
         mod = __import__("page.correlation", fromlist=[""])
 
+        df = None
         for input in self.input():
-            df = mod.luigi_run(input.fn, 3, pagedict, pagecount)
+            print("Start to process {}".format(input.fn))
+            df = mod.luigi_run(input.fn, 4, pagedict, pagecount)
 
-        df.to_csv(self.output().fn)
+        #df.to_csv(self.output().fn)
+        with self.output().open("wb") as out_file:
+            for start_page, info in df.items():
+                for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
+                    out_file.write("{},{},{}\n".format(start_page, end_page, count))
 
     def output(self):
         global BASEPATH_RAW
