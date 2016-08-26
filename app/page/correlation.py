@@ -20,8 +20,6 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
     ts = time.time()
     sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, PAGELINK]).sort_values([SESSION, PAGESEQ], ascending=[1,1])
 
-    #sessionall = DataFrame(df, columns=[SESSION, PAGESEQ, PAGELINK]).sort_values([SESSION, PAGESEQ], ascending=[1,1])
-
     #只保留網址中問號前的資訊
     link_split = [str(line).split(sep='?')[0] for line in sessionall[PAGELINK]]
     sessionall[PAGELINK] = link_split
@@ -42,7 +40,6 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
         session = line[3]
         seq = line[2]
         start_page = line[0]
-        #print(line)
 
         if start_page.find("https") == -1:
             continue
@@ -68,6 +65,8 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
                 page_count(pagecount, start_page, score)
 
                 break  # 只要到EXIT後就不繼續level
+
+    print(len(pagecount))
 
     pagecount.setdefault(EXIT, 0)
 
