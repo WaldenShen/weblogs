@@ -11,9 +11,10 @@ logger = logging.getLogger('luigi-interface')
 
 SEP = ","
 
-BASEPATH = "{}/../data".format(os.path.dirname(os.path.abspath(__file__)))
-BASEPATH_TEMP = os.path.join(BASEPATH, "temp")
-BASEPATH_RAW = os.path.join(BASEPATH, "raw")
+BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
+BASEPATH_TEMP = os.path.join(BASEPATH, "data", "temp")
+BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
+BASEPATH_DRIVER = os.path.join(BASEPATH, "drivers")
 
 class TeradataTable(luigi.Task):
     task_namespace = "clickstream"
@@ -23,12 +24,14 @@ class TeradataTable(luigi.Task):
     columns = luigi.Parameter()
 
     def run(self):
+        global BASEPATH_DRIVER
+
         connection = jdbc.connect('com.teradata.jdbc.TeraDriver',
                                   ['jdbc:teradata://88.8.98.214/tmode=ANSI,CLIENT_CHARSET=WINDOWS-950',
                                    'i0ac30an',
                                    'P@$$w0rd'],
-                                  ['/home/rc/Documents/programs/weblogs/drivers/terajdbc4.jar',
-                                   '/home/rc/Documents/programs/weblogs/drivers/tdgssconfig.jar'])
+                                  ['{}/terajdbc4.jar'.format(BASEPATH_DRIVER),
+                                   '{}/tdgssconfig.jar'.format(BASEPATH_DRIVER)])
         cursor = connection.cursor()
         sql = self.query
 
@@ -62,7 +65,7 @@ class TeradataTable(luigi.Task):
 class RawPath(luigi.Task):
     task_namespace = "clickstream"
 
-    date = luigi.DateParameter(default="2016-08-22")
+    interval = luigi.DateIntervalParameter()
 
     def requires(self):
         global BASEPATH_TEMP
@@ -71,10 +74,11 @@ class RawPath(luigi.Task):
         query = "SELECT PageLocation,EventTimestamp,PageSequenceInSession,SessionNumber FROM VP_OP_ADC.page WHERE EventTimestamp >= '{date} {hour}:00:00' AND EventTimestamp <= '{date} {hour}:59:59' ORDER BY SessionNumber,PageSequenceInSession ASC"
         ofile = "{basepath}/page_{date}_{hour}.csv"
 
-        for hour in range(0, 24):
-            yield TeradataTable(query=query.format(date=self.date, hour="{:02d}".format(hour)),
-                                ofile=ofile.format(basepath=BASEPATH_TEMP, date=self.date, hour="{:02d}".format(hour)),
-                                columns=columns)
+        for date in self.interval:
+            for hour in range(0, 24):
+                yield TeradataTable(query=query.format(date=date, hour="{:02d}".format(hour)),
+                                    ofile=ofile.format(basepath=BASEPATH_TEMP, date=date, hour="{:02d}".format(hour)),
+                                    columns=columns)
 
     def run(self):
         with self.output().open("wb") as out_file:
@@ -105,10 +109,12 @@ class RawPath(luigi.Task):
     def output(self):
         global BASEPATH_RAW
 
-        return luigi.LocalTarget("{}/path_{}.csv".format(BASEPATH_RAW, self.date))
+        return luigi.LocalTarget("{}/path_{}.csv".format(BASEPATH_RAW, self.interval))
 
 class CorrelationPage(RawPath):
     task_namespace = "clickstream"
+
+    length = luigi.IntParameter(default=2)
 
     def run(self):
         pagedict, pagecount = {}, {}
@@ -117,10 +123,9 @@ class CorrelationPage(RawPath):
 
         df = None
         for input in self.input():
-            print("Start to process {}".format(input.fn))
-            df = mod.luigi_run(input.fn, 4, pagedict, pagecount)
+            logger.info("Start to process {}".format(input.fn))
+            df = mod.luigi_run(input.fn, self.length, pagedict, pagecount)
 
-        #df.to_csv(self.output().fn)
         with self.output().open("wb") as out_file:
             for start_page, info in df.items():
                 for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
@@ -129,7 +134,7 @@ class CorrelationPage(RawPath):
     def output(self):
         global BASEPATH_RAW
 
-        return luigi.LocalTarget("{}/two_pages_correlation_{}.csv".format(BASEPATH_RAW, self.date))
+        return luigi.LocalTarget("{}/two_pages_correlation_{}.csv".format(BASEPATH_RAW, self.interval))
 
 
 class RawSession(luigi.Task):
@@ -163,7 +168,7 @@ class RawSession(luigi.Task):
                             out_file.write("{},cookie_id,individual_id,{},{},logic_ratio,count_event,{}\n".format(session_number, lt, at, att))
 
                             chain_length, loading_time, all_time, active_time = 0, 0, 0, 0
-                            
+
                         pre_session_number = session_number
 
                         chain_length += 1

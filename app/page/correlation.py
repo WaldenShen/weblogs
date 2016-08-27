@@ -17,16 +17,15 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
 
     LEVELS = LEVEL
 
-    ts = time.time()
     sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, PAGELINK]).sort_values([SESSION, PAGESEQ], ascending=[1,1])
-
-    #只保留網址中問號前的資訊
-    link_split = [str(line).split(sep='?')[0] for line in sessionall[PAGELINK]]
-    sessionall[PAGELINK] = link_split
 
     START = "start"
     EXIT = "exit"
     DL = len(sessionall) - 1
+
+    def norm_page(url):
+        end_idx = url.find("?")
+        return url[:end_idx if end_idx > -1 else len(url)]
 
     def next_page(pool, start_page, end_page, score):
         pool.setdefault(start_page, {}).setdefault(end_page, 0)
@@ -35,6 +34,8 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
     def page_count(pool, start_page, score):
         pool.setdefault(start_page, 0)
         pool[start_page] += score
+
+    sessionall[PAGELINK] = sessionall[PAGELINK].apply(norm_page) # 只保留"?"之前的URL
 
     for count, line in enumerate(sessionall.values):
         session = line[3]
@@ -69,17 +70,12 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
     pagecount.setdefault(EXIT, 0)
 
     pageall = pagecount.keys()
-    #correlationdf = DataFrame(0, index=pageall, columns=pageall)
 
     results = {}
     for start_page, exit_pages in pagedict.items():
         for exit_page, count in exit_pages.items():
-            #correlationdf.ix[start_page, exit_page] = count / pagecount[start_page]
             if count > 0:
-                results.setdefault(start_page, {}).setdefault(exit_page, count / pagecount[start_page])
-
-    #correlationdf.to_csv(OUTPUTPATH, sep=TAB)
-    #return correlationdf
+                results.setdefault(start_page, {}).setdefault(exit_page, [count, float(count) / pagecount[start_page]])
 
     return results
 
