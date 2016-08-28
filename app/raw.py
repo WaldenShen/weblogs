@@ -109,21 +109,22 @@ class RawPath(luigi.Task):
     def output(self):
         global BASEPATH_RAW
 
-        return luigi.LocalTarget("{}/path_{}.csv".format(BASEPATH_RAW, self.interval))
+        return luigi.LocalTarget("{}/path_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
 
-class CorrelationPage(RawPath):
+class DynamicPage(RawPath):
     task_namespace = "clickstream"
 
+    module = luigi.Parameter()
     length = luigi.IntParameter(default=2)
 
     def run(self):
         pagedict, pagecount = {}, {}
 
-        mod = __import__("page.correlation", fromlist=[""])
+        mod = __import__("page.{}".format(self.module), fromlist=[""])
 
         df = None
         for input in self.input():
-            logger.info("Start to process {}".format(input.fn))
+            logger.info("Start to process {}({}, {})".format(input.fn, len(pagedict), len(pagecount)))
             df = mod.luigi_run(input.fn, self.length, pagedict, pagecount)
 
         with self.output().open("wb") as out_file:
@@ -134,23 +135,25 @@ class CorrelationPage(RawPath):
     def output(self):
         global BASEPATH_RAW
 
-        return luigi.LocalTarget("{}/two_pages_correlation_{}.csv".format(BASEPATH_RAW, self.interval))
-
+        return luigi.LocalTarget("{}/page_corr_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
 
 class RawSession(luigi.Task):
     task_namespace = "clickstream"
 
-    date = luigi.DateParameter(default="2016-08-22")
+    interval = luigi.DateIntervalParameter()
 
     def requires(self):
         global BASEPATH_TEMP
 
+        columns = "SessionNumber,PageLoadDuration,PageViewTime,PageViewActiveTime"
         query = "SELECT SessionNumber,PageLoadDuration,PageViewTime,PageViewActiveTime FROM VP_OP_ADC.pagesummary WHERE EventTimestamp >= '{date} {hour}:00:00' AND EventTimestamp <= '{date} {hour}:59:59' ORDER BY SessionNumber ASC"
         ofile = "{basepath}/session_{date}_{hour}.csv"
 
-        for hour in range(0, 24):
-            yield TeradataTable(query=query.format(date=self.date, hour="{:02d}".format(hour)),
-                                ofile=ofile.format(basepath=BASEPATH_TEMP, date=self.date, hour="{:02d}".format(hour)))
+        for date in self.interval:
+            for hour in range(0, 24):
+                yield TeradataTable(query=query.format(date=date, hour="{:02d}".format(hour)),
+                                    ofile=ofile.format(basepath=BASEPATH_TEMP, date=date, hour="{:02d}".format(hour)),
+                                    columns=columns)
 
     def run(self):
         with self.output().open("wb") as out_file:
@@ -181,4 +184,16 @@ class RawSession(luigi.Task):
     def output(self):
         global BASEPATH_RAW
 
-        return luigi.LocalTarget("{}/session_{}.csv".format(BASEPATH_RAW, self.date))
+        return luigi.LocalTarget("{}/session_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
+
+class Raw(luigi.Task):
+    task_namespace = "clickstream"
+
+    date = luigi.DateIntervalParameter()
+
+    corr = luigi.DictParameter()
+
+    def requires(self):
+        yield DynamicPage(interval=self.date, **self.corr)
+        yield RawPath(interval=self.date)
+        yield RawSession(interval=self.date)

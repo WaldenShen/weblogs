@@ -6,16 +6,14 @@ import pandas as pd
 
 from pandas import DataFrame
 
+SESSION = 'SessionNumber'
+PAGELINK = 'PageLocation'
+PAGESEQ = 'PageSequenceInSession'
+EVENTTIMESTAMP = 'EventTimestamp'
 
-def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
+
+def luigi_run(FILEPATH, chain_length=2, pagedict={}, pagecount={}):
     filepath = FILEPATH
-
-    SESSION = 'SessionNumber'
-    PAGELINK = 'PageLocation'
-    PAGESEQ = 'PageSequenceInSession'
-    EVENTTIMESTAMP = 'EventTimestamp'
-
-    LEVELS = LEVEL
 
     sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, PAGELINK]).sort_values([SESSION, PAGESEQ], ascending=[1,1])
 
@@ -45,8 +43,8 @@ def luigi_run(FILEPATH, LEVEL=2, pagedict={}, pagecount={}):
         if start_page.find("https") == -1:
             continue
 
-        for level in range(0, LEVELS):
-            score = (LEVELS - level) / LEVELS
+        for level in range(0, chain_length):
+            score = float(chain_length - level) / chain_length
 
             if count + level <= DL and session == sessionall[SESSION][count + level]:  # 往後 level 個page為同一個Session
                 if seq == 1:  # 網頁第一筆資料 session
