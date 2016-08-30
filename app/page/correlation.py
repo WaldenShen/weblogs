@@ -6,16 +6,16 @@ import pandas as pd
 
 from pandas import DataFrame
 
-SESSION = 'SessionNumber'
-PAGELINK = 'PageLocation'
-PAGESEQ = 'PageSequenceInSession'
-EVENTTIMESTAMP = 'EventTimestamp'
+SESSION = 'session_id'
+PAGELINK = 'url'
+PAGESEQ = 'session_seq'
+EVENTTIMESTAMP = 'creation_datetime'
 
 
 def luigi_run(FILEPATH, chain_length=2, pagedict={}, pagecount={}):
     filepath = FILEPATH
 
-    sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, PAGELINK]).sort_values([SESSION, PAGESEQ], ascending=[1,1])
+    sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, PAGELINK], sep="\t").sort_values([SESSION, PAGESEQ], ascending=[1,1])
 
     START = "start"
     EXIT = "exit"
@@ -36,9 +36,9 @@ def luigi_run(FILEPATH, chain_length=2, pagedict={}, pagecount={}):
     sessionall[PAGELINK] = sessionall[PAGELINK].apply(norm_page) # 只保留"?"之前的URL
 
     for count, line in enumerate(sessionall.values):
-        session = line[3]
-        seq = line[2]
-        start_page = line[0]
+        session = line[0]
+        seq = line[1]
+        start_page = line[2]
 
         if start_page.find("https") == -1:
             continue

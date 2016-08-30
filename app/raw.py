@@ -3,13 +3,15 @@
 import os
 import operator
 
+import pandas as pd
 import luigi
 import logging
 import jaydebeapi as jdbc
 
 logger = logging.getLogger('luigi-interface')
 
-SEP = ","
+SEP = "\t"
+ENCODE_UTF8 = "UTF-8"
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_TEMP = os.path.join(BASEPATH, "data", "temp")
@@ -61,34 +63,139 @@ class TeradataTable(luigi.Task):
     def output(self):
         return luigi.LocalTarget(self.ofile)
 
-
-class RawPath(luigi.Task):
+class ClickstreamFirstRaw(luigi.Task):
     task_namespace = "clickstream"
 
+    date = luigi.Parameter()
+    hour = luigi.IntParameter()
+
+    ofile = luigi.Parameter()
+    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
+
+    def run(self):
+        global BASEPATH_DRIVER
+
+        results = {}
+
+        connection = jdbc.connect('com.teradata.jdbc.TeraDriver',
+                                  ['jdbc:teradata://88.8.98.214/tmode=ANSI,CLIENT_CHARSET=WINDOWS-950',
+                                   'i0ac30an',
+                                   'P@$$w0rd'],
+                                  ['{}/terajdbc4.jar'.format(BASEPATH_DRIVER),
+                                   '{}/tdgssconfig.jar'.format(BASEPATH_DRIVER)])
+        cursor = connection.cursor()
+
+        sql_1 = "SELECT A.sessionnumber, A.pagesequenceinsession, A.pagelocation, A.eventtimestamp, B.PageViewTime, B.PageViewActiveTime, COALESCE(B.PageLoadDuration,-1) FROM VP_OP_ADC.page A INNER JOIN VP_OP_ADC.pagesummary B ON A.sessionnumber = B.sessionnumber AND A.pageinstanceid = B.pageinstanceid WHERE A.eventtimestamp >= '{date} {hour}:00:00' AND A.eventtimestamp < '{date} {hour}:59:59' ORDER BY A.sessionnumber, A.pagesequenceinsession".format(date=self.date, hour="{:02d}".format(self.hour))
+        logger.info(sql_1)
+
+        cursor.execute(sql_1)
+        for row in cursor.fetchall():
+            try:
+                session_number, seq, url, creation_datetime, duration, active_duration, loading_duration = row
+
+                results.setdefault(session_number, [])
+                results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, "function", "logic", "intention", duration, active_duration, loading_duration, "ip"])
+            except UnicodeEncodeError as e:
+                logger.warn(e)
+
+        sql_2 = "SELECT sessionnumber, MAX(CookieUniqueVisitorTrackingId) FROM VP_OP_ADC.visitor WHERE eventtimestamp >= '{date} {hour}:59:59' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(date=self.date, hour="{:02d}".format(self.hour))
+        logger.info(sql_2)
+
+        cursor.execute(sql_2)
+        for row in cursor.fetchall():
+            try:
+                session_number, cookie_id = row
+                if session_number in results:
+                    for idx in range(0, len(results[session_number])):
+                        results[session_number][idx][0] = cookie_id
+                else:
+                    logger.warn("The cookie_id({}) does NOT exist in results based on session_id({})".format(cookie_id, session_number))
+            except UnicodeEncodeError as e:
+                logger.warn(e)
+
+        sql_3 = "SELECT sessionnumber, MAX(ProfileUiid) FROM VP_OP_ADC.individual WHERE eventtimestamp >= '{date} {hour}:59:59' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(date=self.date, hour="{:02d}".format(self.hour))
+        logger.info(sql_3)
+        for row in cursor.fetchall():
+            try:
+                session_number, profile_id = row
+                if session_number in results:
+                    for idx in range(0, len(results[session_number])):
+                        results[session_number][idx][1] = profile_id
+                else:
+                    logger.warn("The profile_id({}) does NOT exist in results based on session_id({})".format(profile_id, session_number))
+            except UnicodeEncodeError as e:
+                logger.warn(e)
+
+        sql_4 = "SELECT sessionnumber, DeviceIPAddress FROM VP_OP_ADC.sessionstart WHERE eventtimestamp >= '{date} {hour}:59:59' AND eventtimestamp < '{date} {hour}:59:59'".format(date=self.date, hour="{:02d}".format(self.hour))
+        logger.info(sql_4)
+
+        cursor.execute(sql_4)
+        for row in cursor.fetchall():
+            try:
+                session_number, ip = row
+                if session_number in results:
+                    for idx in range(0, len(results[session_number])):
+                        results[session_number][idx][-1] = ip
+                else:
+                    logger.warn("The ip({}) does NOT exist in results based on session_id({})".format(ip, session_number))
+            except UnicodeEncodeError as e:
+                logger.warn(e)
+
+        with self.output().open('wb') as out_file:
+            out_file.write("{}\n".format(SEP.join(self.columns.split(","))))
+
+            for session_id, info in results.items():
+                for row in info:
+                    out_file.write("{}\n".format(SEP.join(str(r) for r in [session_id] + row)))
+
+        # close connection
+        connection.close()
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
+
+
+class RawPage(luigi.Task):
+    task_namespace = "clickstream"
+
+    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
     interval = luigi.DateIntervalParameter()
 
     def requires(self):
         global BASEPATH_TEMP
 
-        columns = "PageLocation,EventTimestamp,PageSequenceInSession,SessionNumber"
-        query = "SELECT PageLocation,EventTimestamp,PageSequenceInSession,SessionNumber FROM VP_OP_ADC.page WHERE EventTimestamp >= '{date} {hour}:00:00' AND EventTimestamp <= '{date} {hour}:59:59' ORDER BY SessionNumber,PageSequenceInSession ASC"
         ofile = "{basepath}/page_{date}_{hour}.csv"
 
         for date in self.interval:
             for hour in range(0, 24):
-                yield TeradataTable(query=query.format(date=date, hour="{:02d}".format(hour)),
-                                    ofile=ofile.format(basepath=BASEPATH_TEMP, date=date, hour="{:02d}".format(hour)),
-                                    columns=columns)
+                yield ClickstreamFirstRaw(date=date, hour=hour,
+                                          ofile=ofile.format(basepath=BASEPATH_TEMP, date=date, hour="{:02d}".format(hour)),
+                                          columns=self.columns)
 
     def run(self):
         with self.output().open("wb") as out_file:
-            out_file.write("SessionID,CookieID,CreationDatetime,nPath\n")
+            out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
 
             pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
             for input in self.input():
                 with input.open("rb") as in_file:
                     for row in in_file:
-                        url, creation_datetime, sequence, session_number = row.strip().rsplit(SEP, 3)
+                        # 0: session_id
+                        # 1: cookie_id
+                        # 2: individual_id
+                        # 3: session_seq
+                        # 4: url
+                        # 5: creation_datetime
+                        # 6: function
+                        # 7: logic
+                        # 8: Intention
+                        # 9: duration
+                        # 10: active_duration
+                        # 11: loading_time
+                        # 12: ip
+
+                        info = row.strip().split(SEP)
+                        session_number, _, _, sequence, url, creation_datetime, _, _, _, _, _, _, _ = info
                         if url.find("https") == -1:
                             continue
 
@@ -96,7 +203,7 @@ class RawPath(luigi.Task):
                         url = url[:start_idx if start_idx > -1 else len(url)]
 
                         if pre_session_number is not None and pre_session_number != session_number:
-                            out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
+                            out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
 
                             pages = []
 
@@ -104,14 +211,14 @@ class RawPath(luigi.Task):
 
                         pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
 
-            out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
+            out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
 
     def output(self):
         global BASEPATH_RAW
 
         return luigi.LocalTarget("{}/path_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
 
-class DynamicPage(RawPath):
+class DynamicPage(RawPage):
     task_namespace = "clickstream"
 
     module = luigi.Parameter()
@@ -130,61 +237,12 @@ class DynamicPage(RawPath):
         with self.output().open("wb") as out_file:
             for start_page, info in df.items():
                 for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
-                    out_file.write("{},{},{}\n".format(start_page, end_page, count))
+                    out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
 
     def output(self):
         global BASEPATH_RAW
 
         return luigi.LocalTarget("{}/page_corr_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
-
-class RawSession(luigi.Task):
-    task_namespace = "clickstream"
-
-    interval = luigi.DateIntervalParameter()
-
-    def requires(self):
-        global BASEPATH_TEMP
-
-        columns = "SessionNumber,PageLoadDuration,PageViewTime,PageViewActiveTime"
-        query = "SELECT SessionNumber,PageLoadDuration,PageViewTime,PageViewActiveTime FROM VP_OP_ADC.pagesummary WHERE EventTimestamp >= '{date} {hour}:00:00' AND EventTimestamp <= '{date} {hour}:59:59' ORDER BY SessionNumber ASC"
-        ofile = "{basepath}/session_{date}_{hour}.csv"
-
-        for date in self.interval:
-            for hour in range(0, 24):
-                yield TeradataTable(query=query.format(date=date, hour="{:02d}".format(hour)),
-                                    ofile=ofile.format(basepath=BASEPATH_TEMP, date=date, hour="{:02d}".format(hour)),
-                                    columns=columns)
-
-    def run(self):
-        with self.output().open("wb") as out_file:
-            out_file.write("SessionNumber,CookieID,IndividualID,PageLoadDuration,PageViewTime,LogicRatio,CountEvent,PageViewActiveTime\n")
-
-            pre_session_number = None
-            chain_length, loading_time, all_time, active_time = 0, 0, 0, 0
-
-            for input in self.input():
-                with input.open("rb") as in_file:
-                    for row in in_file:
-                        session_number, lt, at, att = row.strip().split(SEP)
-
-                        if pre_session_number is not None and session_number != pre_session_number:
-                            out_file.write("{},cookie_id,individual_id,{},{},logic_ratio,count_event,{}\n".format(session_number, lt, at, att))
-
-                            chain_length, loading_time, all_time, active_time = 0, 0, 0, 0
-
-                        pre_session_number = session_number
-
-                        chain_length += 1
-                        loading_time += float(lt) if lt.isdigit() else 0.1
-                        all_time += float(at) if at.isdigit() else 0.1
-                        active_time += float(att) if att.isdigit() else 0.1
-
-            out_file.write("{},cookie_id,individual_id,{},{},logic_ratio,count_event,{}\n".format(session_number, lt, at, att))
-
-    def output(self):
-        global BASEPATH_RAW
-
-        return luigi.LocalTarget("{}/session_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
 
 class Raw(luigi.Task):
     task_namespace = "clickstream"
@@ -195,5 +253,4 @@ class Raw(luigi.Task):
 
     def requires(self):
         yield DynamicPage(interval=self.date, **self.corr)
-        yield RawPath(interval=self.date)
-        yield RawSession(interval=self.date)
+        yield RawPage(interval=self.date)
