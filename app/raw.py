@@ -159,6 +159,7 @@ class RawPage(luigi.Task):
     task_namespace = "clickstream"
 
     columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
+
     interval = luigi.DateIntervalParameter()
 
     def requires(self):
@@ -247,10 +248,11 @@ class DynamicPage(RawPage):
 class Raw(luigi.Task):
     task_namespace = "clickstream"
 
-    date = luigi.DateIntervalParameter()
+    interval = luigi.DateIntervalParameter()
 
     corr = luigi.DictParameter()
 
     def requires(self):
-        yield DynamicPage(interval=self.date, **self.corr)
-        yield RawPage(interval=self.date)
+        for date in self.interval:
+            yield DynamicPage(interval=date, **self.corr)
+            yield RawPage(interval=date)
