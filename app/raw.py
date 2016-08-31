@@ -8,6 +8,8 @@ import luigi
 import logging
 import jaydebeapi as jdbc
 
+from luigi import date_interval as d
+
 logger = logging.getLogger('luigi-interface')
 
 SEP = "\t"
@@ -175,7 +177,8 @@ class RawPage(luigi.Task):
 
     def run(self):
         with self.output().open("wb") as out_file:
-            out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
+            #out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
+            out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
 
             pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
             for input in self.input():
@@ -204,7 +207,8 @@ class RawPage(luigi.Task):
                         url = url[:start_idx if start_idx > -1 else len(url)]
 
                         if pre_session_number is not None and pre_session_number != session_number:
-                            out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
+                            #out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
+                            out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
 
                             pages = []
 
@@ -212,7 +216,8 @@ class RawPage(luigi.Task):
 
                         pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
 
-            out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
+            #out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
+            out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
 
     def output(self):
         global BASEPATH_RAW
@@ -238,7 +243,8 @@ class DynamicPage(RawPage):
         with self.output().open("wb") as out_file:
             for start_page, info in df.items():
                 for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
-                    out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
+                    #out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
+                    out_file.write("{},{},{}\n".format(start_page, end_page, count))
 
     def output(self):
         global BASEPATH_RAW
@@ -248,11 +254,16 @@ class DynamicPage(RawPage):
 class Raw(luigi.Task):
     task_namespace = "clickstream"
 
+    mode = luigi.Parameter(default="range")
     interval = luigi.DateIntervalParameter()
 
     corr = luigi.DictParameter()
 
     def requires(self):
-        for date in self.interval:
+        if self.mode == "single":
             yield DynamicPage(interval=date, **self.corr)
             yield RawPage(interval=date)
+        elif self.mode == "range":
+            for date in self.interval:
+                yield DynamicPage(interval=d.Date.parse(str(date)), **self.corr)
+                yield RawPage(interval=d.Date.parse(str(date)))
