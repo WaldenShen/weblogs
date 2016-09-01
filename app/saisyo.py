@@ -41,17 +41,18 @@ class TeradataTable(luigi.Task):
 
         count_error = 0
         try:
+            logger.info(sql)
             cursor.execute(sql)
         except jdbc.DatabaseError:
             count_error += 1
 
         with self.output().open('wb') as out_file:
-            out_file.write(bytes("{}\n".format(",".join(self.columns.split(SEP))), ENCODE_UTF8))
+            out_file.write("{}\n".format(",".join(self.columns.split(SEP))))
 
             try:
                 for row in cursor.fetchall():
                     try:
-                        out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
+                        out_file.write("{}\n".format(SEP.join([str(r) for r in row])))
                     except UnicodeEncodeError:
                         count_error += 1
             except jdbc.Error:
@@ -60,7 +61,7 @@ class TeradataTable(luigi.Task):
         # close connection
         connection.close()
 
-        logger.log(logging.WARN, "The error count is {}".format(count_error))
+        logger.warn("The error count is {}".format(count_error))
 
     def output(self):
         return luigi.LocalTarget(self.ofile)
@@ -144,11 +145,13 @@ class ClickstreamFirstRaw(luigi.Task):
                 logger.warn(e)
 
         with self.output().open('wb') as out_file:
-            out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
+            #out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
+            out_file.write("{}\n".format(SEP.join(self.columns.split(","))))
 
             for session_id, info in results.items():
                 for row in info:
-                    out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
+                    #out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
+                    out_file.write("{}\n".format(SEP.join(str(r) for r in [session_id] + row)))
 
         # close connection
         connection.close()
@@ -251,6 +254,42 @@ class DynamicPage(RawPage):
 
         return luigi.LocalTarget("{}/page_corr_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
 
+class RawPageError(luigi.Task):
+    task_namespace = "clickstream"
+
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        global BASEPATH_TEMP
+
+        columns = "SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription"
+        query = "SELECT SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription FROM VP_OP_ADC.pageerror WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59'"
+        ofile = "{}/page_error_{}_{}.csv"
+
+        for date in self.interval:
+            for hour in range(0, 24):
+                yield TeradataTable(columns=columns,
+                                    query=query.format(date=date, hour="{:02d}".format(hour)),
+                                    ofile=ofile.format(BASEPATH_TEMP, date, "{:02d}".format(hour)))
+
+    def run(self):
+        count = 0
+
+        for input in self.input():
+            logger.info("Start to process {}".format(input.fn))
+
+            with input.open("rb") as in_file:
+                for line in in_file:
+                    count += 1
+
+        with self.output().open("wb") as out_file:
+            out_file.write(bytes("{}\n".format(count), ENCODE_UTF8))
+
+    def output(self):
+        global BASEPATH_RAW
+
+        return luigi.LocalTarget("{}/page_error_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
+
 class Raw(luigi.Task):
     task_namespace = "clickstream"
 
@@ -261,9 +300,15 @@ class Raw(luigi.Task):
 
     def requires(self):
         if self.mode == "single":
-            yield DynamicPage(interval=date, **self.corr)
-            yield RawPage(interval=date)
+            yield DynamicPage(interval=self.interval, **self.corr)
+            yield RawPage(interval=self.interval)
+
+            # For Page Error
+            yield RawPageError(interval=self.interval)
         elif self.mode == "range":
             for date in self.interval:
                 yield DynamicPage(interval=d.Date.parse(str(date)), **self.corr)
                 yield RawPage(interval=d.Date.parse(str(date)))
+
+                # For Page Error
+                yield RawPageError(interval=d.Date.parse(str(date)))
