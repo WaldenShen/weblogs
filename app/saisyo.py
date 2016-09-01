@@ -46,12 +46,12 @@ class TeradataTable(luigi.Task):
             count_error += 1
 
         with self.output().open('wb') as out_file:
-            out_file.write("{}\n".format(",".join(self.columns.split(SEP))))
+            out_file.write(bytes("{}\n".format(",".join(self.columns.split(SEP))), ENCODE_UTF8))
 
             try:
                 for row in cursor.fetchall():
                     try:
-                        out_file.write("{}\n".format(SEP.join([str(r) for r in row])))
+                        out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
                     except UnicodeEncodeError:
                         count_error += 1
             except jdbc.Error:
@@ -144,11 +144,11 @@ class ClickstreamFirstRaw(luigi.Task):
                 logger.warn(e)
 
         with self.output().open('wb') as out_file:
-            out_file.write("{}\n".format(SEP.join(self.columns.split(","))))
+            out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
 
             for session_id, info in results.items():
                 for row in info:
-                    out_file.write("{}\n".format(SEP.join(str(r) for r in [session_id] + row)))
+                    out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
 
         # close connection
         connection.close()
@@ -177,8 +177,8 @@ class RawPage(luigi.Task):
 
     def run(self):
         with self.output().open("wb") as out_file:
-            #out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
-            out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
+            out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
+            #out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
 
             pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
             for input in self.input():
@@ -207,8 +207,8 @@ class RawPage(luigi.Task):
                         url = url[:start_idx if start_idx > -1 else len(url)]
 
                         if pre_session_number is not None and pre_session_number != session_number:
-                            #out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
-                            out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
+                            out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
+                            #out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
 
                             pages = []
 
@@ -216,8 +216,8 @@ class RawPage(luigi.Task):
 
                         pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
 
-            #out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
-            out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
+            out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
+            #out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
 
     def output(self):
         global BASEPATH_RAW
@@ -243,8 +243,8 @@ class DynamicPage(RawPage):
         with self.output().open("wb") as out_file:
             for start_page, info in df.items():
                 for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
-                    #out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
-                    out_file.write("{},{},{}\n".format(start_page, end_page, count))
+                    out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
+                    #out_file.write("{},{},{}\n".format(start_page, end_page, count))
 
     def output(self):
         global BASEPATH_RAW
