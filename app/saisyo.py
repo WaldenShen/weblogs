@@ -233,7 +233,7 @@ class DynamicPage(RawPage):
     def run(self):
         pagedict, pagecount = {}, {}
 
-        mod = __import__("page.{}".format(self.module), fromlist=[""])
+        mod = __import__("advanced.page.{}".format(self.module), fromlist=[""])
 
         df = None
         for input in self.input():
