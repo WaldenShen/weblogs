@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import re
 import operator
 
 import pandas as pd
@@ -9,15 +10,18 @@ import logging
 import jaydebeapi as jdbc
 
 from luigi import date_interval as d
+from advanced.page import suffix_tree
 
 logger = logging.getLogger('luigi-interface')
 
 SEP = "\t"
+NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_TEMP = os.path.join(BASEPATH, "data", "temp")
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
+BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_DRIVER = os.path.join(BASEPATH, "drivers")
 
 class TeradataTable(luigi.Task):
@@ -160,7 +164,7 @@ class ClickstreamFirstRaw(luigi.Task):
         return luigi.LocalTarget(self.ofile)
 
 
-class RawPage(luigi.Task):
+class RawPath(luigi.Task):
     task_namespace = "clickstream"
 
     columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
@@ -180,8 +184,8 @@ class RawPage(luigi.Task):
 
     def run(self):
         with self.output().open("wb") as out_file:
-            out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
-            #out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
+            #out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
+            out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
 
             pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
             for input in self.input():
@@ -210,8 +214,8 @@ class RawPage(luigi.Task):
                         url = url[:start_idx if start_idx > -1 else len(url)]
 
                         if pre_session_number is not None and pre_session_number != session_number:
-                            out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
-                            #out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
+                            #out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+                            out_file.write("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP))
 
                             pages = []
 
@@ -219,15 +223,47 @@ class RawPage(luigi.Task):
 
                         pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
 
-            out_file.write(bytes("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)), ENCODE_UTF8))
-            #out_file.write("{},{},{},{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, ">".join(pages)))
+            #out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+            out_file.write("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP))
 
     def output(self):
         global BASEPATH_RAW
 
         return luigi.LocalTarget("{}/path_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
 
-class DynamicPage(RawPage):
+class CommonPathTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        yield RawPath(interval=self.interval)
+
+    def run(self):
+        common_path = suffix_tree.CommonPath()
+
+        for input in self.input():
+            with input.open("rb") as in_file:
+                is_header = True
+
+                for line in in_file:
+                    if is_header:
+                        is_header = False
+                    else:
+                        session_id, _, _, path = re.split("[\t,]", line.strip())
+                        common_path.plant_tree(session_id, path.split(NEXT))
+
+        with self.output().open("wb") as out_file:
+            for session_ids, paths in common_path.print_tree():
+                out_file.write("{}\n".format(SEP.join(session_ids)))
+                out_file.write("{}\n".format(SEP.join(paths)))
+
+    def output(self):
+        global BASEPATH_ADV
+
+        return luigi.LocalTarget("{}/common_path_{}.csv.gz".format(BASEPATH_ADV, self.interval), format=luigi.format.Gzip)
+
+class DynamicPage(RawPath):
     task_namespace = "clickstream"
 
     module = luigi.Parameter()
@@ -246,8 +282,8 @@ class DynamicPage(RawPage):
         with self.output().open("wb") as out_file:
             for start_page, info in df.items():
                 for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
-                    out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
-                    #out_file.write("{},{},{}\n".format(start_page, end_page, count))
+                    #out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
+                    out_file.write("{},{},{}\n".format(start_page, end_page, count))
 
     def output(self):
         global BASEPATH_RAW
@@ -283,7 +319,8 @@ class RawPageError(luigi.Task):
                     count += 1
 
         with self.output().open("wb") as out_file:
-            out_file.write(bytes("{}\n".format(count), ENCODE_UTF8))
+            #out_file.write(bytes("{}\n".format(count), ENCODE_UTF8))
+            out_file.write("{}\n".format(count))
 
     def output(self):
         global BASEPATH_RAW
@@ -301,14 +338,14 @@ class Raw(luigi.Task):
     def requires(self):
         if self.mode == "single":
             yield DynamicPage(interval=self.interval, **self.corr)
-            yield RawPage(interval=self.interval)
+            yield CommonPathTask(interval=self.interval)
 
             # For Page Error
             yield RawPageError(interval=self.interval)
         elif self.mode == "range":
             for date in self.interval:
                 yield DynamicPage(interval=d.Date.parse(str(date)), **self.corr)
-                yield RawPage(interval=d.Date.parse(str(date)))
+                yield CommonPathTask(interval=d.Date.parse(str(date)))
 
                 # For Page Error
                 yield RawPageError(interval=d.Date.parse(str(date)))

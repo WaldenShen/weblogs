@@ -7,6 +7,7 @@ from check_tracking_code.items import CheckTrackingCodeItem
 
 PATTERN_1 = "celebrusinsert.js"
 PATTERN_2 = "https://www.cathaybk.com.tw/cathaybk/card/card/costco/js/script.js"
+PATTERN_3 = "analytics.js"
 
 DONE = set()
 
