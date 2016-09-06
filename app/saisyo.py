@@ -11,18 +11,17 @@ import jaydebeapi as jdbc
 
 from luigi import date_interval as d
 from advanced.page import suffix_tree
+from utils import load_category, norm_url
+from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
-
-SEP = "\t"
-NEXT = ">"
-ENCODE_UTF8 = "UTF-8"
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_TEMP = os.path.join(BASEPATH, "data", "temp")
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_DRIVER = os.path.join(BASEPATH, "drivers")
+FILEPATH_CATEGORY = os.path.join(BASEPATH, "data", "setting", "category.tsv")
 
 class TeradataTable(luigi.Task):
     task_namespace = "clickstream"
@@ -81,11 +80,13 @@ class ClickstreamFirstRaw(luigi.Task):
     columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
 
     def run(self):
-        global BASEPATH_DRIVER
+        global BASEPATH_DRIVER, FILEPATH_CATEGORY
 
         table = ""
         if self.date.month != datetime.datetime.now().month:
             table = "{}{:02d}".format(self.date.year, self.date.month)
+
+        category = load_category(FILEPATH_CATEGORY)
 
         results = {}
 
@@ -104,9 +105,14 @@ class ClickstreamFirstRaw(luigi.Task):
         for row in cursor.fetchall():
             try:
                 session_number, seq, url, creation_datetime, duration, active_duration, loading_duration = row
+                url = url.lower()
+
+                function, logic, intention = None, None, None
+                if url in category:
+                    function, logic, intention = category[url]["function"], category[url]["logic"], category[url]["intention"]
 
                 results.setdefault(session_number, [])
-                results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, "function", "logic", "intention", duration, active_duration, loading_duration, "ip"])
+                results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, "ip"])
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
@@ -217,8 +223,7 @@ class RawPath(luigi.Task):
                         if url.find("https") == -1:
                             continue
 
-                        start_idx = url.find("?")
-                        url = url[:start_idx if start_idx > -1 else len(url)]
+                        url = norm_url(url)
 
                         if pre_session_number is not None and pre_session_number != session_number:
                             out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
