@@ -11,6 +11,8 @@ import jaydebeapi as jdbc
 
 from luigi import date_interval as d
 from advanced.page import suffix_tree
+
+from rdb import TeradataTable
 from utils import load_category, norm_url
 from utils import SEP, NEXT, ENCODE_UTF8
 
@@ -23,52 +25,6 @@ BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_DRIVER = os.path.join(BASEPATH, "drivers")
 FILEPATH_CATEGORY = os.path.join(BASEPATH, "data", "setting", "category.tsv")
 
-class TeradataTable(luigi.Task):
-    task_namespace = "clickstream"
-
-    query = luigi.Parameter()
-
-    ofile = luigi.Parameter()
-    columns = luigi.Parameter()
-
-    def run(self):
-        global BASEPATH_DRIVER
-
-        connection = jdbc.connect('com.teradata.jdbc.TeraDriver',
-                                  ['jdbc:teradata://88.8.98.214/tmode=ANSI,CLIENT_CHARSET=WINDOWS-950',
-                                   'i0ac30an',
-                                   'P@$$w0rd'],
-                                  ['{}/terajdbc4.jar'.format(BASEPATH_DRIVER),
-                                   '{}/tdgssconfig.jar'.format(BASEPATH_DRIVER)])
-        cursor = connection.cursor()
-        sql = self.query
-
-        count_error = 0
-        try:
-            logger.info(sql)
-            cursor.execute(sql)
-        except jdbc.DatabaseError:
-            count_error += 1
-
-        with self.output().open('wb') as out_file:
-            out_file.write("{}\n".format(",".join(self.columns.split(SEP))))
-
-            try:
-                for row in cursor.fetchall():
-                    try:
-                        out_file.write("{}\n".format(SEP.join([str(r) for r in row])))
-                    except UnicodeEncodeError:
-                        count_error += 1
-            except jdbc.Error:
-                pass
-
-        # close connection
-        connection.close()
-
-        logger.warn("The error count is {}".format(count_error))
-
-    def output(self):
-        return luigi.LocalTarget(self.ofile)
 
 class ClickstreamFirstRaw(luigi.Task):
     task_namespace = "clickstream"
@@ -294,7 +250,7 @@ class DynamicPage(RawPath):
         with self.output().open("wb") as out_file:
             for start_page, info in df.items():
                 for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
-                    out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
+                    out_file.write(bytes("{}{sep}{}{sep}{}\n".format(start_page, end_page, count, sep=SEP), ENCODE_UTF8))
                     #out_file.write("{},{},{}\n".format(start_page, end_page, count))
 
     def output(self):
