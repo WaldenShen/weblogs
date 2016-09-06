@@ -1,8 +1,8 @@
 #!/usr/bin/python
 
 import os
-import re
 import operator
+import datetime
 
 import pandas as pd
 import luigi
@@ -28,6 +28,7 @@ class TeradataTable(luigi.Task):
     task_namespace = "clickstream"
 
     query = luigi.Parameter()
+
     ofile = luigi.Parameter()
     columns = luigi.Parameter()
 
@@ -82,6 +83,10 @@ class ClickstreamFirstRaw(luigi.Task):
     def run(self):
         global BASEPATH_DRIVER
 
+        table = ""
+        if self.date.month != datetime.datetime.now().month:
+            table = "{}{:02d}".format(self.date.year, self.date.month)
+
         results = {}
 
         connection = jdbc.connect('com.teradata.jdbc.TeraDriver',
@@ -92,7 +97,7 @@ class ClickstreamFirstRaw(luigi.Task):
                                    '{}/tdgssconfig.jar'.format(BASEPATH_DRIVER)])
         cursor = connection.cursor()
 
-        sql_1 = "SELECT A.sessionnumber, A.pagesequenceinsession, A.pagelocation, A.eventtimestamp, B.PageViewTime, B.PageViewActiveTime, COALESCE(B.PageLoadDuration,-1) FROM VP_OP_ADC.page A INNER JOIN VP_OP_ADC.pagesummary B ON A.sessionnumber = B.sessionnumber AND A.pageinstanceid = B.pageinstanceid WHERE A.eventtimestamp >= '{date} {hour}:00:00' AND A.eventtimestamp < '{date} {hour}:59:59' ORDER BY A.sessionnumber, A.pagesequenceinsession".format(date=self.date, hour="{:02d}".format(self.hour))
+        sql_1 = "SELECT A.sessionnumber, A.pagesequenceinsession, A.pagelocation, A.eventtimestamp, B.PageViewTime, B.PageViewActiveTime, COALESCE(B.PageLoadDuration,-1) FROM VP_OP_ADC.page{table} A LEFT JOIN VP_OP_ADC.pagesummary{table} B ON A.sessionnumber = B.sessionnumber AND A.pageinstanceid = B.pageinstanceid WHERE A.eventtimestamp >= '{date} {hour}:00:00' AND A.eventtimestamp < '{date} {hour}:59:59' ORDER BY A.sessionnumber, A.pagesequenceinsession".format(table=table, date=self.date, hour="{:02d}".format(self.hour))
         logger.info(sql_1)
 
         cursor.execute(sql_1)
@@ -105,7 +110,7 @@ class ClickstreamFirstRaw(luigi.Task):
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
-        sql_2 = "SELECT sessionnumber, MAX(CookieUniqueVisitorTrackingId) FROM VP_OP_ADC.visitor WHERE eventtimestamp >= '{date} {hour}:59:59' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(date=self.date, hour="{:02d}".format(self.hour))
+        sql_2 = "SELECT sessionnumber, MAX(CookieUniqueVisitorTrackingId) FROM VP_OP_ADC.visitor{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(table=table, date=self.date, hour="{:02d}".format(self.hour))
         logger.info(sql_2)
 
         cursor.execute(sql_2)
@@ -120,8 +125,10 @@ class ClickstreamFirstRaw(luigi.Task):
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
-        sql_3 = "SELECT sessionnumber, MAX(ProfileUiid) FROM VP_OP_ADC.individual WHERE eventtimestamp >= '{date} {hour}:59:59' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(date=self.date, hour="{:02d}".format(self.hour))
+        sql_3 = "SELECT sessionnumber, MAX(ProfileUiid) FROM VP_OP_ADC.individual{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(table=table, date=self.date, hour="{:02d}".format(self.hour))
         logger.info(sql_3)
+
+        cursor.execute(sql_3)
         for row in cursor.fetchall():
             try:
                 session_number, profile_id = row
@@ -133,7 +140,7 @@ class ClickstreamFirstRaw(luigi.Task):
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
-        sql_4 = "SELECT sessionnumber, DeviceIPAddress FROM VP_OP_ADC.sessionstart WHERE eventtimestamp >= '{date} {hour}:59:59' AND eventtimestamp < '{date} {hour}:59:59'".format(date=self.date, hour="{:02d}".format(self.hour))
+        sql_4 = "SELECT sessionnumber, DeviceIPAddress FROM VP_OP_ADC.sessionstart{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59'".format(table=table, date=self.date, hour="{:02d}".format(self.hour))
         logger.info(sql_4)
 
         cursor.execute(sql_4)
@@ -184,8 +191,8 @@ class RawPath(luigi.Task):
 
     def run(self):
         with self.output().open("wb") as out_file:
-            #out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
-            out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
+            out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
+            #out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
 
             pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
             for input in self.input():
@@ -214,8 +221,8 @@ class RawPath(luigi.Task):
                         url = url[:start_idx if start_idx > -1 else len(url)]
 
                         if pre_session_number is not None and pre_session_number != session_number:
-                            #out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
-                            out_file.write("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP))
+                            out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+                            #out_file.write("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP))
 
                             pages = []
 
@@ -223,8 +230,8 @@ class RawPath(luigi.Task):
 
                         pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
 
-            #out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
-            out_file.write("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP))
+            out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+            #out_file.write("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP))
 
     def output(self):
         global BASEPATH_RAW
@@ -250,13 +257,13 @@ class CommonPathTask(luigi.Task):
                     if is_header:
                         is_header = False
                     else:
-                        session_id, _, _, path = re.split("[\t,]", line.strip())
+                        session_id, _, _, path = line.decode(ENCODE_UTF8).strip().split(SEP)
                         common_path.plant_tree(session_id, path.split(NEXT))
 
         with self.output().open("wb") as out_file:
             for session_ids, paths in common_path.print_tree():
-                out_file.write("{}\n".format(SEP.join(session_ids)))
-                out_file.write("{}\n".format(SEP.join(paths)))
+                out_file.write(bytes("{}\n".format(SEP.join(session_ids)), ENCODE_UTF8))
+                out_file.write(bytes("{}\n".format(SEP.join(paths)), ENCODE_UTF8))
 
     def output(self):
         global BASEPATH_ADV
@@ -282,8 +289,8 @@ class DynamicPage(RawPath):
         with self.output().open("wb") as out_file:
             for start_page, info in df.items():
                 for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
-                    #out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
-                    out_file.write("{},{},{}\n".format(start_page, end_page, count))
+                    out_file.write(bytes("{},{},{}\n".format(start_page, end_page, count), ENCODE_UTF8))
+                    #out_file.write("{},{},{}\n".format(start_page, end_page, count))
 
     def output(self):
         global BASEPATH_RAW
@@ -299,13 +306,17 @@ class RawPageError(luigi.Task):
         global BASEPATH_TEMP
 
         columns = "SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription"
-        query = "SELECT SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription FROM VP_OP_ADC.pageerror WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59'"
+        query = "SELECT SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription FROM VP_OP_ADC.pageerror{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59'"
         ofile = "{}/page_error_{}_{}.csv"
 
         for date in self.interval:
             for hour in range(0, 24):
+                table = ""
+                if date.month != datetime.datetime.now().month:
+                    table = "{}{:02d}".format(date.year, date.month)
+
                 yield TeradataTable(columns=columns,
-                                    query=query.format(date=date, hour="{:02d}".format(hour)),
+                                    query=query.format(table=table, date=date, hour="{:02d}".format(hour)),
                                     ofile=ofile.format(BASEPATH_TEMP, date, "{:02d}".format(hour)))
 
     def run(self):
@@ -319,8 +330,8 @@ class RawPageError(luigi.Task):
                     count += 1
 
         with self.output().open("wb") as out_file:
-            #out_file.write(bytes("{}\n".format(count), ENCODE_UTF8))
-            out_file.write("{}\n".format(count))
+            out_file.write(bytes("{}\n".format(count), ENCODE_UTF8))
+            #out_file.write("{}\n".format(count))
 
     def output(self):
         global BASEPATH_RAW
