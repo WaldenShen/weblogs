@@ -7,7 +7,7 @@ import logging
 import luigi
 import jaydebeapi as jdbc
 
-from utils import SEP
+from utils import SEP, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
 
@@ -29,40 +29,40 @@ def get_connection():
 class TeradataInsertTable(luigi.Task):
     task_namespace = "clickstream"
 
-    ifile = luigi.Parameter()
     ofile = luigi.Parameter()
+    sql = luigi.Parameter()
 
-    makder_database = luigi.Parameter(default="FH_TEMP")
-    maker_table = luigi.Parameter(default="clickstream_page_corr")
+    def requires(self):
+        pass
 
-    sql = luigi.Parameter(default="INSERT FH_TEMP.clickstream_page_corr VALUES (?,?,?,?)")
+    def parse_line(self, line):
+        return tuple(line.strip().split(SEP))
 
     def run(self):
         connection = get_connection()
-
         cursor = connection.cursor()
-        #cursor.prepare(self.sql)
 
-        for input in [self.ifile]:
+        count = 0
+        for input in self.input():
             rows = []
-
             is_header = True
-            with gzip.open(input, "rb") as in_file:
+            with input.open("rb") as in_file:
                 for line in in_file:
+                    line = line.decode(ENCODE_UTF8)
+
                     if is_header:
                         is_header = False
                     else:
-                        logger.info(len(str(line).strip().split(",")))
-                        rows.append(tuple(str(line).strip().split(",")))
+                        rows.append(self.parse_line(line))
 
             cursor.executemany(self.sql, rows)
-            #cursor.commit()
+            count += len(rows)
 
         cursor.close()
         connection.close()
 
-        with open(self.ofile, "wb") as out_file:
-            out_file.write("{}\n".format(len(rows)))
+        with self.output().open("wb") as out_file:
+            out_file.write(bytes("Insert {} records - {}\n".format(count, self.sql), ENCODE_UTF8))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
@@ -89,12 +89,12 @@ class TeradataTable(luigi.Task):
             count_error += 1
 
         with self.output().open('wb') as out_file:
-            out_file.write("{}\n".format(",".join(self.columns.split(SEP))))
+            out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
 
             try:
                 for row in cursor.fetchall():
                     try:
-                        out_file.write("{}\n".format(SEP.join([str(r) for r in row])))
+                        out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
                     except UnicodeEncodeError:
                         count_error += 1
             except jdbc.Error:
@@ -106,4 +106,4 @@ class TeradataTable(luigi.Task):
         logger.warn("The error count is {}".format(count_error))
 
     def output(self):
-        return luigi.LocalTarget(self.ofile)
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
