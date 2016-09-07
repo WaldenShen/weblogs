@@ -40,6 +40,21 @@ def norm_url(url):
     start_idx = url.find("?")
     return url[:start_idx if start_idx > -1 else len(url)]
 
+def get_date_type(filename):
+    date = filename.split("_")[2].split(".")[0]
+
+    date_type = None
+    if len(date) == 10:
+        date_type = "day"
+    elif len(date) == 4:
+        date_type = "year"
+    elif date.upper().find("W") > -1:
+        date_type = "week"
+    else:
+        date_type = "month"
+
+    return date_type
+
 if __name__ == "__main__":
     category = load_category("../data/setting/category.tsv")
     for url, c in category.items():
