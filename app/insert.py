@@ -1,14 +1,18 @@
 #!/usr/bin/python
 
+import os
 import json
 import logging
 
 import luigi
 
-from saisyo import DynamicTask
+from page import PageCorrTask
 from rdb import TeradataInsertTable
 
 logger = logging.getLogger('luigi-interface')
+
+BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
+BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 
 
 class InsertPageCorrTask(TeradataInsertTable):
@@ -36,7 +40,9 @@ class InsertPageCorrTask(TeradataInsertTable):
     sql = luigi.Parameter(default="INSERT FH_TEMP.clickstream_page_corr VALUES (?,?,?,?,?,?,?,?)")
 
     def requires(self):
-        yield DynamicTask(interval=self.interval, node_type=self.node_type, lib=self.lib, length=self.length)
+        ofile = "{}/{}_corr_{}.csv.gz".format(BASEPATH_RAW, self.node_type, self.interval)
+
+        yield PageCorrTask(ofile=ofile, interval=self.interval, node_type=self.node_type, lib=self.lib, length=self.length)
 
     def parse_line(self, line):
         o = json.loads(line)

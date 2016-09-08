@@ -16,9 +16,10 @@ OUTPUT
 ============================
 cookie_id
 individual_id
-creation_datetime
+-- creation_datetime
 duration
 active_duration
+loading_duration
 chain_length
 logic           DICT
 intention       DICT
@@ -32,6 +33,7 @@ INIT_R = {"cookie_id": None,
           "active_duration": 0,
           "loading_duration": 0,
           "logic": {},
+          "function": {},
           "intention": {},}
 
 def set_record(results, cookie_id, individual_id, logic, intention, duration, active_duration, loading_duration):
@@ -39,6 +41,18 @@ def set_record(results, cookie_id, individual_id, logic, intention, duration, ac
 
     results.setdefault(cookie_id, INIT_R.copy())
     # implement your logic
+
+    results[cookie_id]["cookie_id"] = cookie_id
+    results[cookie_id]["individual_id"] = individual_id
+
+    results[cookie_id].setdefault("duration", 0)
+    results[cookie_id]["duration"] += float(duration)
+
+    results[cookie_id].setdefault("active_duration", 0)
+    results[cookie_id]["active_duration"] += float(active_duration)
+
+    results[cookie_id].setdefault("loading_duration", 0)
+    results[cookie_id]["loading_duration"] += float(loading_duration)
 
 def luigi_run(filepath, results={}):
     global SEP
@@ -49,6 +63,8 @@ def luigi_run(filepath, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _. _, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
+                session_id, cookie_id, individual_id, _, _, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
 
                 set_record(results, cookie_id, individual_id, logic, intention, duration, active_duration, loading_duration)
+
+    return results
