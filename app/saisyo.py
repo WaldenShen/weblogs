@@ -13,7 +13,7 @@ from luigi import date_interval as d
 from advanced.page import suffix_tree
 
 from rdb import TeradataTable
-from utils import load_category, norm_url, get_date_type
+from utils import load_category, norm_url
 from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
@@ -231,36 +231,6 @@ class CommonPathTask(luigi.Task):
 
         return luigi.LocalTarget("{}/common_path_{}.csv.gz".format(BASEPATH_ADV, self.interval), format=luigi.format.Gzip)
 
-class DynamicTask(RawPath):
-    task_namespace = "clickstream"
-
-    node_type = luigi.Parameter(default="url")
-
-    lib = luigi.Parameter()
-    length = luigi.IntParameter(default=2)
-
-    def run(self):
-        pagedict, pagecount = {}, {}
-
-        mod = __import__(self.lib, fromlist=[""])
-
-        df = None
-        for input in self.input():
-            logger.info("Start to process {}({}, {})".format(input.fn, len(pagedict), len(pagecount)))
-            df = mod.luigi_run(input.fn, self.length, pagedict, pagecount)
-
-        date_type = get_date_type(self.output().fn)
-
-        with self.output().open("wb") as out_file:
-            for d in mod.get_json(df, self.node_type, date_type, str(self.interval), self.length):
-                out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
-                #out_file.write("{},{},{}\n".format(start_page, end_page, count))
-
-    def output(self):
-        global BASEPATH_RAW
-
-        return luigi.LocalTarget("{}/{}_corr_{}.csv.gz".format(BASEPATH_RAW, self.node_type, self.interval), format=luigi.format.Gzip)
-
 class RawPageError(luigi.Task):
     task_namespace = "clickstream"
 
@@ -301,3 +271,28 @@ class RawPageError(luigi.Task):
         global BASEPATH_RAW
 
         return luigi.LocalTarget("{}/page_error_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
+
+class SimpleDynamicTask(RawPath):
+    task_namespace = "clickstream"
+
+    ofile = luigi.Parameter()
+
+    lib = luigi.Parameter()
+
+    def run(self):
+        pagedict, pagecount = {}, {}
+
+        mod = __import__(self.lib, fromlist=[""])
+
+        df = None
+        for input in self.input():
+            logger.info("Start to process {}".format(input.fn))
+            df = mod.luigi_run(input.fn)
+
+        with self.output().open("wb") as out_file:
+            for d in df.values():
+                out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+                #out_file.write("{}\n".format(json.dumps(d)))
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
