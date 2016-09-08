@@ -1,4 +1,5 @@
 #!/usr/bin/python
+#-*- coding: utf-8 -*-
 
 import gzip
 
@@ -36,11 +37,15 @@ INIT_R = {"cookie_id": None,
           "function": {},
           "intention": {},}
 
-def set_record(results, cookie_id, individual_id, logic, intention, duration, active_duration, loading_duration):
+def set_record(results, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration):
     global INIT_R
 
     results.setdefault(cookie_id, INIT_R.copy())
     # implement your logic
+
+    logic = logic if logic else "其他"
+    function = function if function else "其他"
+    intention = intention if intention else "其他"
 
     results[cookie_id]["cookie_id"] = cookie_id
     results[cookie_id]["individual_id"] = individual_id
@@ -54,10 +59,19 @@ def set_record(results, cookie_id, individual_id, logic, intention, duration, ac
     results[cookie_id].setdefault("loading_duration", 0)
     results[cookie_id]["loading_duration"] += float(loading_duration)
 
+    results[cookie_id]["logic"].setdefault(logic, 0)
+    results[cookie_id]["logic"][logic] += 1
+
+    results[cookie_id]["function"].setdefault(function, 0)
+    results[cookie_id]["function"][function] += 1
+
+    results[cookie_id]["intention"].setdefault(intention, 0)
+    results[cookie_id]["intention"][intention] += 1
+
 def luigi_run(filepath, results={}):
     global SEP
 
-    with gzip.open(filepath, "r", encoding="utf-8") as in_file:
+    with gzip.open(filepath, encoding="utf-8") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
@@ -65,6 +79,6 @@ def luigi_run(filepath, results={}):
             else:
                 session_id, cookie_id, individual_id, _, _, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
 
-                set_record(results, cookie_id, individual_id, logic, intention, duration, active_duration, loading_duration)
+                set_record(results, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration)
 
     return results

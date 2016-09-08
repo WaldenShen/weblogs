@@ -292,7 +292,7 @@ class SimpleDynamicTask(RawPath):
         with self.output().open("wb") as out_file:
             for d in df.values():
                 out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
-                #out_file.write("{},{},{}\n".format(start_page, end_page, count))
+                #out_file.write("{}\n".format(json.dumps(d)))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
