@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # coding=UTF-8
 
+import re
+
 SEP = "\t"
 NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
@@ -29,7 +31,7 @@ def load_category(filepath):
             if is_header:
                 is_header = False
             else:
-                info = line.strip().lower().split(SEP)
+                info = re.split(",", line.strip().lower())
 
                 website, product_1, product_2, function, intention, url = info
                 results.setdefault(url, {"logic": "{}_{}".format(product_1, product_2), "function": function, "intention": intention})

@@ -1,6 +1,7 @@
 #-*- coding: utf-8 -*-
 
 import time
+import operator
 import numpy as np
 import pandas as pd
 
@@ -77,17 +78,17 @@ def luigi_run(FILEPATH, chain_length=2, pagedict={}, pagecount={}):
 
     return results
 
-def get_json(df):
+def get_json(df, node_type, date_type, interval, length):
     for start_page, info in df.items():
         for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
             d = {"url_start": start_page,
                  "url_end": end_page,
-                 "url_type": self.node_type,
+                 "url_type": node_type,
                  "date_type": date_type,
-                 "creation_datetime": str(self.interval),
+                 "creation_datetime": interval,
                  "count": count[0],
                  "percentage": count[1],
-                 "chain_length": self.length}
+                 "chain_length": length}
 
             yield d
 

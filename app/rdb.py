@@ -100,7 +100,7 @@ class TeradataTable(luigi.Task):
                         for row in results:
                            try:
                                 out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
-                            except UnicodeEncodeError as e:
+                           except UnicodeEncodeError as e:
                                 logger.warn(e)
 
                                 count_error += 1
