@@ -24,19 +24,32 @@ class Raw(luigi.Task):
 
     corr = luigi.DictParameter()
 
+    #raw_session = luigi.DictParameter()
     raw_cookie = luigi.DictParameter()
+
+    #stats_cookie = luigi.DictParameter()
+    #stats_website = luigi.DictParameter()
 
     def requires(self):
         global BASEPATH_DB
 
         if self.mode == "single":
             ofile_page_corr = os.path.join(BASEPATH_DB, "page_corr_{}.txt".format(self.interval))
+
+            ofile_raw_session = os.path.join(BASEPATH_RAW, "session_{}.tsv.gz".format(self.interval))
             ofile_raw_cookie = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(self.interval))
 
-            #yield InsertPageCorrTask(interval=self.interval, ofile=ofile_page_corr, **self.corr)
+            ofile_stats_website = os.path.join(BASEPATH_RAW, "website_{}.tsv.gz".format(self.interval))
+            ofile_stats_cookie = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(self.interval))
+
+            yield InsertPageCorrTask(interval=self.interval, ofile=ofile_page_corr, **self.corr)
             yield CommonPathTask(interval=self.interval)
 
+            #yield SimpleDynamicTask(interval=self.interval, ofile=ofile_raw_session, **self.raw_session)
             yield SimpleDynamicTask(interval=self.interval, ofile=ofile_raw_cookie, **self.raw_cookie)
+
+            #yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_cookie, **self.stats_website)
+            #yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_website, **self.stats_cookie)
 
             # For Page Error
             yield RawPageError(interval=self.interval)
@@ -45,12 +58,21 @@ class Raw(luigi.Task):
                 interval = d.Date.parse(str(date))
 
                 ofile_page_corr = os.path.join(BASEPATH_DB, "page_corr_{}.txt".format(str(date)))
+
+                ofile_raw_session = os.path.join(BASEPATH_RAW, "session_{}.tsv.gz".format(self.interval))
                 ofile_raw_cookie = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(self.interval))
 
-                #yield InsertPageCorrTask(interval=interval, ofile=ofile_page_corr, **self.corr)
+                ofile_stats_website = os.path.join(BASEPATH_RAW, "website_{}.tsv.gz".format(self.interval))
+                ofile_stats_cookie = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(self.interval))
+
+                yield InsertPageCorrTask(interval=interval, ofile=ofile_page_corr, **self.corr)
                 yield CommonPathTask(interval=interval)
 
+                #yield SimpleDynamicTask(interval=self.interval, ofile=ofile_raw_session, **self.raw_session)
                 yield SimpleDynamicTask(interval=self.interval, ofile=ofile_raw_cookie, **self.raw_cookie)
+
+                #yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_cookie, **self.stats_website)
+                #yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_website, **self.stats_cookie)
 
                 # For Page Error
                 yield RawPageError(interval=interval)
