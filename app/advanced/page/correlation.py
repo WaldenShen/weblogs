@@ -1,6 +1,7 @@
 #-*- coding: utf-8 -*-
 
 import time
+import operator
 import numpy as np
 import pandas as pd
 
@@ -76,6 +77,20 @@ def luigi_run(FILEPATH, chain_length=2, pagedict={}, pagecount={}):
                 results.setdefault(start_page, {}).setdefault(exit_page, [count, float(count) / pagecount[start_page]])
 
     return results
+
+def get_json(df, node_type, date_type, interval, length):
+    for start_page, info in df.items():
+        for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
+            d = {"url_start": start_page,
+                 "url_end": end_page,
+                 "url_type": node_type,
+                 "date_type": date_type,
+                 "creation_datetime": interval,
+                 "count": count[0],
+                 "percentage": count[1],
+                 "chain_length": length}
+
+            yield d
 
 if __name__ == "__main__":
     Correlation("/Users/yehben/Desktop/Page_expose.txt","/Users/yehben/Desktop/output.csv",3)

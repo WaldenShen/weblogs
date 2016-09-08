@@ -71,6 +71,7 @@ class TeradataTable(luigi.Task):
     task_namespace = "clickstream"
 
     query = luigi.Parameter()
+    batch_size = luigi.IntParameter(default=10000)
 
     ofile = luigi.Parameter()
     columns = luigi.Parameter()
@@ -92,13 +93,21 @@ class TeradataTable(luigi.Task):
             out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
 
             try:
-                for row in cursor.fetchall():
-                    try:
-                        out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
-                    except UnicodeEncodeError:
-                        count_error += 1
-            except jdbc.Error:
-                pass
+                while True:
+                    results = cursor.fetchmany(self.batch_size)
+
+                    if results:
+                        for row in results:
+                           try:
+                                out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
+                           except UnicodeEncodeError as e:
+                                logger.warn(e)
+
+                                count_error += 1
+                    else:
+                        break
+            except jdbc.Error as e:
+                logger.warn(e)
 
         # close connection
         connection.close()

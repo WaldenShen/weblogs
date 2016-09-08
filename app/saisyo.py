@@ -2,7 +2,6 @@
 
 import os
 import json
-import operator
 import datetime
 
 import pandas as pd
@@ -14,7 +13,7 @@ from luigi import date_interval as d
 from advanced.page import suffix_tree
 
 from rdb import TeradataTable
-from utils import load_category, norm_url
+from utils import load_category, norm_url, get_date_type
 from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
@@ -243,39 +242,19 @@ class DynamicTask(RawPath):
     def run(self):
         pagedict, pagecount = {}, {}
 
-        mod = __import__("advanced.page.{}".format(self.lib), fromlist=[""])
+        mod = __import__(self.lib, fromlist=[""])
 
         df = None
         for input in self.input():
             logger.info("Start to process {}({}, {})".format(input.fn, len(pagedict), len(pagecount)))
             df = mod.luigi_run(input.fn, self.length, pagedict, pagecount)
 
-        date = self.output().fn.split("_")[2].split(".")[0]
-        logger.info(date)
-        date_type = None
-        if len(date) == 10:
-            date_type = "day"
-        elif len(date) == 4:
-            date_type = "year"
-        elif date.upper().find("W") > -1:
-            date_type = "week"
-        else:
-            date_type = "month"
+        date_type = get_date_type(self.output().fn)
 
         with self.output().open("wb") as out_file:
-            for start_page, info in df.items():
-                for end_page, count in sorted(info.items(), key=operator.itemgetter(1), reverse=True):
-                    d = {"url_start": start_page,
-                         "url_end": end_page,
-                         "url_type": self.node_type,
-                         "date_type": date_type,
-                         "creation_datetime": str(self.interval),
-                         "count": count[0],
-                         "percentage": count[1],
-                         "chain_length": self.length}
-
-                    out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
-                    #out_file.write("{},{},{}\n".format(start_page, end_page, count))
+            for d in mod.get_json(df, self.node_type, date_type, str(self.interval), self.length):
+                out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+                #out_file.write("{},{},{}\n".format(start_page, end_page, count))
 
     def output(self):
         global BASEPATH_RAW
