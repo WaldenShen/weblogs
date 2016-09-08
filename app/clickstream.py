@@ -22,13 +22,13 @@ class Raw(luigi.Task):
     mode = luigi.Parameter(default="range")
     interval = luigi.DateIntervalParameter()
 
-    corr = luigi.DictParameter()
+    corr = luigi.DictParameter(default={"lib": "advanced.page.correlation", "length": 4})
 
-    #raw_session = luigi.DictParameter()
-    raw_cookie = luigi.DictParameter()
+    raw_session = luigi.DictParameter(default={"lib": "basic.raw.session"})
+    raw_cookie = luigi.DictParameter(default={"lib": "basic.raw.cookie"})
 
-    #stats_cookie = luigi.DictParameter()
-    #stats_website = luigi.DictParameter()
+    stats_cookie = luigi.DictParameter(default={"lib": "basic.stats.cookie"})
+    stats_website = luigi.DictParameter(default={"lib": "basic.stats.website"})
 
     def requires(self):
         global BASEPATH_DB
