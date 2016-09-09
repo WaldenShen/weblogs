@@ -16,9 +16,9 @@ INPUT
 
 OUTPUT
 ================================
-cookie_key      # Logic, Intention
+cookie_key      logic / function / intention
 cookie_value    # Logic: 理財/投資/信貸... Intention: 旅遊/美食/...
-n_count
+n_count         10
 '''
 
 

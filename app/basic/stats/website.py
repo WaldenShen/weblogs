@@ -14,20 +14,19 @@ session_id      cookie_id       individual_id   session_seq     url     creation
 
 OUTPUT
 ============================
-domain
-page_view
-user_view
-chain_length
-duration
-active_duration
-loading_duration
-count_failed
-count_session
-count_cookie
-count_logic         DICT
-count_function      DICT
-count_intention     DICT
-count_uncategory    INT
+domain              https://www.cathaybk.com.tw
+page_view           19734
+user_view           2712
+duration            3153021.0
+active_duration     1935515.0
+loading_duration    937515.0
+count_failed        -- 先忽略
+count_session       253515
+count_cookie        193152
+count_logic         {"理財": 12, "信貸": 1}
+count_function      {"登入": 1, "查詢": 2}
+count_intention     {"旅遊": 1, "有車": 5}
+count_uncategory    5933
 '''
 
 SEP = "\t"

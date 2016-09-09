@@ -15,31 +15,28 @@ session_id      cookie_id       individual_id   session_seq     url     creation
 
 OUTPUT
 ============================
-session_id              35651589
-cookie_id               4991d0ad940743178e0fcd661da2f82d
-individual_id           P22B00DB1B34345B48
-creation_datetime       2016-09-01 10:16:19.283000
-duration                83695.0
-active_duration         29212.0
-chain_length            27
-logic                   {"理財": 12, "信貸": 1}
-function                {"登入": 1, "查詢": 2}
-intention               {"旅遊": 1, "有車": 5}
-count_event             -- 先忽略
+url                 https://www.cathaybk.com.tw/card/card/index.aspx / 信貸 / 填表 / 旅遊
+url_type            url / logic / function / intention
+date_type           hour / day / week / month / year
+creation_datetime   2016-09-01 10:00:00 / 2016-09-01 / 2016-W34 / 2016-09 / 2016
+page_view           1242
+user_viwe           734
+duration            92525.0
+active_duration     51930.0
+loading_duration    10935.3
 '''
 
 SEP = "\t"
-INIT_R = {"session_id": None,
-          "cookie_id": None,
-          "individual_id": None,
+INIT_R = {"url": None,
+          "url_type": None,
+          "date_type": None,
+          "creation_datetime": None,
+          "page_view": 0,
+          "user_view": 0,
           "duration": 0,
           "active_duration": 0,
           "loading_duration": 0,
-          "chain_length": 0,
-          "logic": {},
-          "function": {},
-          "intention": {},
-          "count_event": 0}
+          "n_count": 0}
 
 def set_record(results, session_id, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration):
     global INIT_R
