@@ -44,6 +44,32 @@ def set_record(results, creation_datetime, cookie_id, individual_id, logic, func
     results.setdefault(cookie_id, INIT_R.copy())
     # implement your logic
 
+    logic = logic if (logic and logic.lower() != "none" )else "其他"
+    function = function if (function and function.lower() != "none") else "其他"
+    intention = intention if (intention and intention.lower() != "none") else "其他"
+
+    results[cookie_id]["cookie_id"] = cookie_id
+    results[cookie_id]["individual_id"] = individual_id
+
+    results[cookie_id]["creation_datetime"] = creation_datetime
+
+    results[cookie_id].setdefault("duration", 0)
+    results[cookie_id]["duration"] += float(duration)
+
+    results[cookie_id].setdefault("active_duration", 0)
+    results[cookie_id]["active_duration"] += float(active_duration)
+
+    results[cookie_id].setdefault("loading_duration", 0)
+    results[cookie_id]["loading_duration"] += float(loading_duration)
+
+    results[cookie_id]["logic"].setdefault(logic, 0)
+    results[cookie_id]["logic"][logic] += 1
+
+    results[cookie_id]["function"].setdefault(function, 0)
+    results[cookie_id]["function"][function] += 1
+
+    results[cookie_id]["intention"].setdefault(intention, 0)
+    results[cookie_id]["intention"][intention] += 1
 
 def luigi_run(filepath, results={}):
     global SEP
