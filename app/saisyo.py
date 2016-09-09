@@ -146,7 +146,7 @@ class RawPath(luigi.Task):
         ofile = "{basepath}/page_{date}_{hour}.csv.gz"
 
         for date in self.interval:
-            for hour in range(0, 24):
+            for hour in range(0, 3):
                 yield ClickstreamFirstRaw(date=date, hour=hour,
                                           ofile=ofile.format(basepath=BASEPATH_TEMP, date=date, hour="{:02d}".format(hour)),
                                           columns=self.columns)
