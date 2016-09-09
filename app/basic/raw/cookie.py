@@ -44,9 +44,9 @@ def set_record(results, creation_datetime, cookie_id, individual_id, logic, func
     results.setdefault(cookie_id, INIT_R.copy())
     # implement your logic
 
-    logic = logic if logic else "其他"
-    function = function if function else "其他"
-    intention = intention if intention else "其他"
+    logic = logic if (logic and logic.lower() != "none" )else "其他"
+    function = function if (function and function.lower() != "none") else "其他"
+    intention = intention if (intention and intention.lower() != "none") else "其他"
 
     results[cookie_id]["cookie_id"] = cookie_id
     results[cookie_id]["individual_id"] = individual_id
@@ -74,13 +74,13 @@ def set_record(results, creation_datetime, cookie_id, individual_id, logic, func
 def luigi_run(filepath, results={}):
     global SEP
 
-    with gzip.open(filepath, "r", encoding="utf-8") as in_file:
+    with gzip.open(filepath, "rb") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
+                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode("utf8").strip().split(SEP)
 
                 set_record(results, cookie_id, creation_datetime, individual_id, logic, function, intention, duration, active_duration, loading_duration)
 

@@ -50,13 +50,13 @@ def set_record(results, session_id, cookie_id, individual_id, logic, function, i
 def luigi_run(filepath, results={}):
     global SEP
 
-    with gzip.open(filepath, "r", encoding="utf-8") as in_file:
+    with gzip.open(filepath, "rb") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _. _, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
+                session_id, cookie_id, individual_id, _, _. _, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode("utf8").strip().split(SEP)
 
                 set_record(results, session_id, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration)
 
