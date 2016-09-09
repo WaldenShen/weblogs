@@ -74,7 +74,7 @@ def set_record(results, creation_datetime, cookie_id, individual_id, logic, func
 def luigi_run(filepath, results={}):
     global SEP
 
-    with gzip.open(filepath, encoding="utf-8") as in_file:
+    with gzip.open(filepath, "r", encoding="utf-8") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
