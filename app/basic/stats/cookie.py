@@ -8,6 +8,7 @@ INPUT
 ================================
 {"cookie_id": None,
  "individual_id": None,
+ "creation_datetime": None
  "duration": 0,
  "active_duration": 0,
  "loading_duration": 0,
@@ -16,9 +17,11 @@ INPUT
 
 OUTPUT
 ================================
-cookie_key      # Logic, Intention
-cookie_value    # Logic: 理財/投資/信貸... Intention: 旅遊/美食/...
-n_count
+cookie_key          logic / function / intention
+cookie_value        # Logic: 理財/投資/信貸... Intention: 旅遊/美食/...
+date_type           hour / day / week / month/ year
+creation_datetime   2016-09-01 10:16:19.283000
+n_count             10
 '''
 
 
