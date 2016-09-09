@@ -38,7 +38,7 @@ INIT_R = {"cookie_id": None,
           "function": {},
           "intention": {},}
 
-def set_record(results, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration):
+def set_record(results, creation_datetime, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration):
     global INIT_R
 
     results.setdefault(cookie_id, INIT_R.copy())
@@ -50,6 +50,8 @@ def set_record(results, cookie_id, individual_id, logic, function, intention, du
 
     results[cookie_id]["cookie_id"] = cookie_id
     results[cookie_id]["individual_id"] = individual_id
+
+    results[cookie_id]["creation_datetime"] = creation_datetime
 
     results[cookie_id].setdefault("duration", 0)
     results[cookie_id]["duration"] += float(duration)
@@ -78,8 +80,8 @@ def luigi_run(filepath, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
+                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
 
-                set_record(results, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration)
+                set_record(results, cookie_id, creation_datetime, individual_id, logic, function, intention, duration, active_duration, loading_duration)
 
     return results
