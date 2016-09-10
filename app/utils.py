@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # coding=UTF-8
 
+import os
 import re
 
 SEP = "\t"
@@ -43,7 +44,7 @@ def norm_url(url):
     return url[:start_idx if start_idx > -1 else len(url)]
 
 def get_date_type(filename):
-    date = filename.split("_")[2].split(".")[0]
+    date = os.path.basename(filename).split("_")[1].split(".")[0]
 
     date_type = None
     if len(date) == 10:
@@ -55,7 +56,7 @@ def get_date_type(filename):
     else:
         date_type = "month"
 
-    return date_type
+    return date, date_type
 
 if __name__ == "__main__":
     category = load_category("../data/setting/category.tsv")

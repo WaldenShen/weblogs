@@ -2,6 +2,7 @@
 #-*- coding: utf-8 -*-
 
 import gzip
+import json
 
 '''
 INPUT
@@ -28,10 +29,12 @@ intention                   {"旅遊": 1, "有車": 5}
 '''
 
 SEP = "\t"
+ENCODE = "utf8"
 OTHER = "其他"
 
 INIT_R = {"cookie_id": None,
           "individual_id": None,
+          "creation_datetime": None,
           "duration": 0,
           "active_duration": 0,
           "loading_duration": 0,
@@ -39,42 +42,36 @@ INIT_R = {"cookie_id": None,
           "function": {},
           "intention": {},}
 
+FUNC = lambda x: x if (x and x.lower() != "none" ) else OTHER
+
 def set_record(results, creation_datetime, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration):
-    global INIT_R, OTHER
+    global INIT_R, OTHER, FUNC
 
     results.setdefault(cookie_id, INIT_R.copy())
-
-    f = lambda x: True if (x and x.lower() != "none" ) else False
-
-    logic = f(logic)
-    function = f(function)
-    intention = f(intention)
 
     results[cookie_id]["cookie_id"] = cookie_id
     results[cookie_id]["individual_id"] = individual_id
 
     results[cookie_id]["creation_datetime"] = creation_datetime
 
-    results[cookie_id].setdefault("duration", 0)
     results[cookie_id]["duration"] += float(duration)
-
-    results[cookie_id].setdefault("active_duration", 0)
     results[cookie_id]["active_duration"] += float(active_duration)
-
-    results[cookie_id].setdefault("loading_duration", 0)
     results[cookie_id]["loading_duration"] += float(loading_duration)
 
+    logic = FUNC(logic)
     results[cookie_id]["logic"].setdefault(logic, 0)
     results[cookie_id]["logic"][logic] += 1
 
+    function = FUNC(function)
     results[cookie_id]["function"].setdefault(function, 0)
     results[cookie_id]["function"][function] += 1
 
+    intention = FUNC(intention)
     results[cookie_id]["intention"].setdefault(intention, 0)
     results[cookie_id]["intention"][intention] += 1
 
 def luigi_run(filepath, results={}):
-    global SEP
+    global SEP, ENCODE
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
@@ -82,8 +79,15 @@ def luigi_run(filepath, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode("utf8").strip().split(SEP)
+                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE).strip().split(SEP)
 
-                set_record(results, cookie_id, creation_datetime, individual_id, logic, function, intention, duration, active_duration, loading_duration)
+                set_record(results, creation_datetime, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration)
 
     return results
+
+def luigi_dump(out_file, df, creation_datetime, date_type):
+    global ENCODE
+
+    for d in df.values():
+        #out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE))
+        out_file.write("{}\n".format(json.dumps(d)))

@@ -13,7 +13,7 @@ from luigi import date_interval as d
 from advanced.page import suffix_tree
 
 from rdb import TeradataTable
-from utils import load_category, norm_url
+from utils import load_category, norm_url, get_date_type
 from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
@@ -146,7 +146,7 @@ class RawPath(luigi.Task):
         ofile = "{basepath}/page_{date}_{hour}.csv.gz"
 
         for date in self.interval:
-            for hour in range(0, 3):
+            for hour in range(0, 24):
                 yield ClickstreamFirstRaw(date=date, hour=hour,
                                           ofile=ofile.format(basepath=BASEPATH_TEMP, date=date, hour="{:02d}".format(hour)),
                                           columns=self.columns)
@@ -278,21 +278,33 @@ class SimpleDynamicTask(RawPath):
     ofile = luigi.Parameter()
 
     lib = luigi.Parameter()
+    mode = luigi.Parameter()
 
     def run(self):
         pagedict, pagecount = {}, {}
 
         mod = __import__(self.lib, fromlist=[""])
 
-        df = None
-        for input in self.input():
-            logger.info("Start to process {}".format(input.fn))
-            df = mod.luigi_run(input.fn)
+        if self.mode.lower() == "dict":
+            df = None
+            for input in self.input():
+                logger.info("Start to process {}".format(input.fn))
+                df = mod.luigi_run(input.fn)
 
-        with self.output().open("wb") as out_file:
-            for d in df.values():
-                out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
-                #out_file.write("{}\n".format(json.dumps(d)))
+            with self.output().open("wb") as out_file:
+                creation_datetime, date_type = get_date_type(self.output().fn)
+
+                mod.luigi_dump(out_file, df, creation_datetime, date_type)
+        elif self.mode.lower() == "list":
+            with self.output().open("wb") as out_file:
+                for input in self.input():
+                    logger.info("Start to process {}".format(input.fn))
+
+                    creation_datetime, date_type = get_date_type(self.output().fn)
+                    for row in mod.luigi_run(input.fn):
+                        out_file.write("{}\n".format(json.dumps(row)))
+        else:
+            raise NotImplemented
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
