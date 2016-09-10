@@ -1,10 +1,12 @@
 #!/usr/bin/python
 
 import os
+import json
 import gzip
 import logging
 
 import luigi
+import sqlite3
 import jaydebeapi as jdbc
 
 from utils import SEP, ENCODE_UTF8
@@ -13,6 +15,8 @@ logger = logging.getLogger('luigi-interface')
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_DRIVER = os.path.join(BASEPATH, "drivers")
+BASEPATH_DB = os.path.join(BASEPATH, "data", "db")
+
 
 def get_connection():
     global BASEPATH_DRIVER
@@ -113,6 +117,45 @@ class TeradataTable(luigi.Task):
         connection.close()
 
         logger.warn("The error count is {}".format(count_error))
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class SqlliteTable(luigi.Task):
+    task_namespace = "clickstream"
+
+    table = luigi.Parameter(default="stats_page")
+    database = luigi.Parameter(default="clickstream.db")
+
+    ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+
+    def run(self):
+        global BASEPATH_DB
+
+        conn = sqlite3.connect(os.path.join(BASEPATH_DB, self.database))
+        cursor = conn.cursor()
+
+        sql = None
+        with gzip.open(self.ifile, "rb") as in_file:
+            rows = []
+            for line in in_file:
+                j = json.loads(line.strip())
+
+                if sql is None:
+                    columns = ",".join(j.keys())
+
+                    sql = "INSERT INTO {table}({columns}) VALUES ({value})".format(table=self.table, columns=columns, value=",".join(["?" for i in j.keys()]))
+
+                rows.append(tuple(j.values()))
+
+            cursor.executemany(sql, rows)
+
+        with self.output().open("wb") as out_file:
+            out_file.write("{} - {}\n".format(len(rows), sql))
+
+        conn.commit()
+        conn.close()
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)

@@ -1,9 +1,16 @@
 #!/usr/bin/python
 # coding=UTF-8
 
+import os
 import re
 
+import gzip
+import json
+import datetime
+import pprint
+
 SEP = "\t"
+OTHER = "其他"
 NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
@@ -43,10 +50,13 @@ def norm_url(url):
     return url[:start_idx if start_idx > -1 else len(url)]
 
 def get_date_type(filename):
-    date = filename.split("_")[2].split(".")[0]
+    date = os.path.basename(filename).split("_")[1].split(".")[0]
 
     date_type = None
-    if len(date) == 10:
+    if len(date) == 12:
+        date = datetime.datetime.strptime(date, "%Y-%m-%d%H").strftime("%Y-%m-%d %H:00:00")
+        date_type = "hour"
+    elif len(date) == 10:
         date_type = "day"
     elif len(date) == 4:
         date_type = "year"
@@ -55,10 +65,22 @@ def get_date_type(filename):
     else:
         date_type = "month"
 
-    return date_type
+    return date, date_type
+
+def print_json(filepath):
+    with gzip.open(filepath, "rb") as out_file:
+        for line in out_file:
+            j = json.loads(line.strip())
+            pprint.pprint(j)
 
 if __name__ == "__main__":
+    import sys
+
+    print_json(sys.argv[1])
+
+    '''
     category = load_category("../data/setting/category.tsv")
     for url, c in category.items():
         for f, value in c.items():
             print(url, f, value)
+    '''
