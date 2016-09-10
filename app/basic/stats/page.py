@@ -2,6 +2,10 @@
 #-*- coding: utf-8 -*-
 
 import gzip
+import json
+
+from utils import norm_url
+from utils import SEP, OTHER
 
 '''
 INPUT
@@ -26,35 +30,55 @@ active_duration     51930.0
 loading_duration    10935.3
 '''
 
-SEP = "\t"
-INIT_R = {"url": None,
-          "url_type": None,
-          "date_type": None,
-          "creation_datetime": None,
-          "page_view": 0,
-          "user_view": 0,
-          "duration": 0,
-          "active_duration": 0,
-          "loading_duration": 0,
-          "n_count": 0}
+FUNC = lambda x: x if (x and x.lower() != "none" ) else OTHER
 
-def set_record(results, session_id, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration):
-    global INIT_R
+def set_record(results, cookie_id, url, logic, function, intention, duration, active_duration, loading_duration):
+    global OTHER, FUNC
 
-    results.setdefault(session_id, INIT_R.copy())
-    # implement your logic
+    logic = FUNC(logic)
+    function = FUNC(function)
+    intention = FUNC(intention)
+
+    for key_type, key in zip(["url", "logic", "function", "intention"], [url, logic, function, intention]):
+        # implement your logic
+        init_r = {"url": None,
+                  "url_type": None,
+                  "page_view": 0,
+                  "user_view": set(),
+                  "duration": 0,
+                  "active_duration": 0,
+                  "loading_duration": 0}
+
+        results.setdefault(key, init_r)
+
+        results[key]["url"] = key
+        results[key]["url_type"] = key_type
+        results[key]["page_view"] += 1
+        results[key]["user_view"].add(cookie_id)
+        results[key]["duration"] += float(duration)
+        results[key]["active_duration"] += float(active_duration)
+        results[key]["loading_duration"] += float(loading_duration)
 
 def luigi_run(filepath, results={}):
     global SEP
 
-    with gzip.open(filepath, "r", encoding="utf-8") as in_file:
+    with gzip.open(filepath, "rb") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _. _, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
+                session_id, cookie_id, individual_id, _, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
 
-                set_record(results, session_id, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration)
+                set_record(results, cookie_id, norm_url(url), logic, function, intention, duration, active_duration, loading_duration)
 
     return results
+
+def luigi_dump(out_file, results, creation_datetime, date_type):
+    for d in results.values():
+        d["creation_datetime"] = creation_datetime
+        d["date_type"] = date_type
+
+        d["user_view"] = len(d["user_view"])
+
+        out_file.write("{}\n".format(json.dumps(d)))

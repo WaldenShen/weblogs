@@ -4,6 +4,8 @@
 import gzip
 import json
 
+from utils import SEP, ENCODE_UTF8, OTHER
+
 '''
 INPUT
 ============================
@@ -24,16 +26,10 @@ creation_datetime   2016-09-01 10:16:19.283000
 n_count             10
 '''
 
-SEP = "\t"
-ENCODE = "utf8"
-OTHER = "其他"
-
-INIT_R = {"cookie_key": None,
-          "cookie_value": None,
-          "n_count": 0}
+FUNC = lambda x: x if (x and x.lower() != "none" ) else OTHER
 
 def luigi_run(filepath, results={}):
-    global SEP, ENCODE
+    global SEP, ENCODE_UTF8, OTHER, FUNC
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
@@ -41,33 +37,41 @@ def luigi_run(filepath, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, url, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE).strip().split(SEP)
+                session_id, cookie_id, individual_id, _, url, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
 
-                logic = logic if (logic and logic.lower() != "none") else OTHER
-                key = "logic_" + logic
-                results.setdefault(key, INIT_R.copy())
-                results[key]["cookie_key"] = "logic"
-                results[key]["cookie_value"] = logic
-                results[key]["n_count"] += 1
+                logic = FUNC(logic)
+                function = FUNC(function)
+                intention = FUNC(intention)
 
-                function = function if (function and function.lower() != "none") else OTHER
-                key = "function_" + function
-                results.setdefault(key, INIT_R.copy())
-                results[key]["cookie_key"] = "function"
-                results[key]["cookie_value"] = function
-                results[key]["n_count"] += 1
+                results.setdefault(cookie_id, {})
 
-                intention = intention if (intention and intention.lower() != "none") else OTHER
-                key = "intention_" + intention
-                results.setdefault(key, INIT_R.copy())
-                results[key]["cookie_key"] = "intention"
-                results[key]["cookie_value"] = intention
-                results[key]["n_count"] += 1
+                for name, value in zip(["logic", "function", "intention"], [logic, function, intention]):
+                    key = name + "_" + logic
+                    results[cookie_id].setdefault(key, 0)
+                    results[cookie_id][key] += 1
 
     return results
 
 def luigi_dump(out_file, results, creation_datetime, date_type):
-    for d in results.values():
+    r = {}
+
+    for cookie_id, info in results.items():
+        total_count = 0
+
+        for key, value in info.items():
+            r.setdefault(key, {})
+            category_key, category_value = key.split("_", 1)
+            r[key]["category_key"] = category_key
+            r[key]["category_value"] = category_value
+            r[key]["n_count"] = 0
+
+            if key.find("logic") > -1:
+                total_count += value
+
+        for key, value in info.items():
+            r[key]["n_count"] += float(value) / total_count
+
+    for d in r.values():
         d["creation_datetime"] = creation_datetime
         d["date_type"] = date_type
 

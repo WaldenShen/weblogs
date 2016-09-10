@@ -4,6 +4,8 @@
 import gzip
 import json
 
+from utils import SEP, ENCODE_UTF8, OTHER
+
 '''
 INPUT
 ============================
@@ -27,10 +29,6 @@ logic                       {"理財": 12, "信貸": 1}
 function                    {"登入": 1, "查詢": 2}
 intention                   {"旅遊": 1, "有車": 5}
 '''
-
-SEP = "\t"
-ENCODE = "utf8"
-OTHER = "其他"
 
 INIT_R = {"cookie_id": None,
           "individual_id": None,
@@ -71,7 +69,7 @@ def set_record(results, creation_datetime, cookie_id, individual_id, logic, func
     results[cookie_id]["intention"][intention] += 1
 
 def luigi_run(filepath, results={}):
-    global SEP, ENCODE
+    global SEP, ENCODE_UTF8
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
@@ -79,14 +77,14 @@ def luigi_run(filepath, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE).strip().split(SEP)
+                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
 
                 set_record(results, creation_datetime, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration)
 
     return results
 
 def luigi_dump(out_file, df, creation_datetime, date_type):
-    global ENCODE
+    global ENCODE_UTF8
 
     for d in df.values():
         #out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE))

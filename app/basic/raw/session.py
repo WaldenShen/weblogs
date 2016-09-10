@@ -4,6 +4,8 @@
 import gzip
 import json
 
+from utils import SEP, ENCODE_UTF8, OTHER
+
 '''
 INPUT
 ============================
@@ -28,10 +30,6 @@ function                {"登入": 1, "查詢": 2}
 intention               {"旅遊": 1, "有車": 5}
 count_event             -- 先忽略
 '''
-
-SEP = "\t"
-ENCODE = "utf8"
-OTHER = "其他"
 
 INIT_R = {"session_id": None,
           "cookie_id": None,
@@ -75,7 +73,7 @@ def set_record(results, session_id, cookie_id, individual_id, creation_datetime,
     results[session_id]["intention"][intention] += 1
 
 def luigi_run(filepath, results={}):
-    global SEP, ENCODE
+    global SEP, ENCODE_UTF8
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
@@ -83,7 +81,7 @@ def luigi_run(filepath, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE).strip().split(SEP)
+                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
 
                 set_record(results, session_id, cookie_id, individual_id, creation_datetime, logic, function, intention, duration, active_duration, loading_duration)
 
