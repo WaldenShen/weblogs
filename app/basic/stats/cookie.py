@@ -72,7 +72,9 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
             r[key]["n_count"] += float(value) / total_count
 
     for d in r.values():
+        global ENCODE_UTF8
+
         d["creation_datetime"] = creation_datetime
         d["date_type"] = date_type
 
-        out_file.write("{}\n".format(json.dumps(d)))
+        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))

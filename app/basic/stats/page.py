@@ -5,7 +5,7 @@ import gzip
 import json
 
 from utils import norm_url
-from utils import SEP, OTHER, FUNC
+from utils import SEP, OTHER, FUNC, ENCODE_UTF8
 
 '''
 INPUT
@@ -79,4 +79,4 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
 
         d["user_view"] = len(d["user_view"])
 
-        out_file.write("{}\n".format(json.dumps(d)))
+        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))

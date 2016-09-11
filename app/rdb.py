@@ -131,7 +131,7 @@ class SqlliteTable(luigi.Task):
     ofile = luigi.Parameter()
 
     def run(self):
-        global BASEPATH_SQLLITE
+        global BASEPATH_SQLLITE, ENCODE_UTF8
 
         conn = sqlite3.connect(os.path.join(BASEPATH_SQLLITE, self.database))
         cursor = conn.cursor()
@@ -152,7 +152,7 @@ class SqlliteTable(luigi.Task):
             cursor.executemany(sql, rows)
 
         with self.output().open("wb") as out_file:
-            out_file.write("{} - {}\n".format(len(rows), sql))
+            out_file.write(bytes("{} - {}\n".format(len(rows), sql), ENCODE_UTF8))
 
         conn.commit()
         conn.close()
