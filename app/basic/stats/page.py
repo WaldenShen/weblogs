@@ -5,7 +5,7 @@ import gzip
 import json
 
 from utils import norm_url
-from utils import SEP, OTHER
+from utils import SEP, OTHER, FUNC
 
 '''
 INPUT
@@ -30,14 +30,12 @@ active_duration     51930.0
 loading_duration    10935.3
 '''
 
-FUNC = lambda x: x if (x and x.lower() != "none" ) else OTHER
-
 def set_record(results, cookie_id, url, logic, function, intention, duration, active_duration, loading_duration):
     global OTHER, FUNC
 
-    logic = FUNC(logic)
-    function = FUNC(function)
-    intention = FUNC(intention)
+    logic = FUNC(logic, "logic")
+    function = FUNC(function, "function")
+    intention = FUNC(intention, "intention")
 
     for key_type, key in zip(["url", "logic", "function", "intention"], [url, logic, function, intention]):
         # implement your logic

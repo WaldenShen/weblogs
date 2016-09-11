@@ -5,7 +5,7 @@ import gzip
 import json
 
 from urlparse import urlparse
-from utils import SEP, ENCODE_UTF8, OTHER
+from utils import SEP, ENCODE_UTF8, OTHER, FUNC
 
 '''
 INPUT
@@ -36,7 +36,7 @@ count_intention     {"旅遊": 1, "有車": 5}
 '''
 
 def luigi_run(filepath, results={}):
-    global SEP, OTHER, ENCODE_UTF8, INIT_R
+    global SEP, OTHER, ENCODE_UTF8, INIT_R, FUNC
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
@@ -75,15 +75,16 @@ def luigi_run(filepath, results={}):
                     if session_id != session:
                         results[domain]["count_session"] += 1
 
-                    logic = logic if (logic and logic.lower() != "none") else OTHER
+                    logic = FUNC(logic, "logic")
+                    function = FUNC(function, "function")
+                    intention = FUNC(intention, "intention")
+
                     results[domain]["count_logic"].setdefault(logic, 0)
                     results[domain]["count_logic"][logic] += 1
 
-                    function = function if (function and function.lower() != "none") else OTHER
                     results[domain]["count_function"].setdefault(function, 0)
                     results[domain]["count_function"][function] += 1
 
-                    intention = intention if (intention and intention.lower() != "none") else OTHER
                     results[domain]["count_intention"].setdefault(intention, 0)
                     results[domain]["count_intention"][intention] += 1
 

@@ -14,6 +14,8 @@ OTHER = "其他"
 NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
+FUNC = lambda x, y: y + "_" + x if (x and x.lower() != "none" ) else y + "_" + OTHER
+
 def load_category(filepath):
     results = {}
 
