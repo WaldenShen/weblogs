@@ -15,7 +15,7 @@ logger = logging.getLogger('luigi-interface')
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_DRIVER = os.path.join(BASEPATH, "drivers")
-BASEPATH_DB = os.path.join(BASEPATH, "data", "db")
+BASEPATH_SQLLITE = os.path.join(BASEPATH, "data", "sqllite")
 
 
 def get_connection():
@@ -131,9 +131,9 @@ class SqlliteTable(luigi.Task):
     ofile = luigi.Parameter()
 
     def run(self):
-        global BASEPATH_DB
+        global BASEPATH_SQLLITE
 
-        conn = sqlite3.connect(os.path.join(BASEPATH_DB, self.database))
+        conn = sqlite3.connect(os.path.join(BASEPATH_SQLLITE, self.database))
         cursor = conn.cursor()
 
         sql = None

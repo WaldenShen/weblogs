@@ -145,11 +145,10 @@ class RDBStatsTask(luigi.Task):
                         table = "stats_{}".format(stats_type)
                         yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-                        if hour == 0:
-                            ifile = os.path.join(BASEPATH_STATS, "{}_{}.tsv.gz".format(stats_type, str(date)))
-                            ofile = os.path.join(BASEPATH_DB, "{}_{}.tsv.gz".format(stats_type, str(date)))
+                    ifile = os.path.join(BASEPATH_STATS, "{}_{}.tsv.gz".format(stats_type, str(date)))
+                    ofile = os.path.join(BASEPATH_DB, "{}_{}.tsv.gz".format(stats_type, str(date)))
 
-                            table = "stats_{}".format(stats_type)
-                            yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+                    table = "stats_{}".format(stats_type)
+                    yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplemented
