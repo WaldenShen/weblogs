@@ -52,24 +52,17 @@ class Raw(luigi.Task):
             ofile_raw_cookie = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(self.interval))
             yield SimpleDynamicTask(interval=self.interval, ofile=ofile_raw_cookie, **self.raw_cookie)
 
+            ofile_stats_page = os.path.join(BASEPATH_STATS, "page_{}.tsv.gz".format(self.interval))
+            yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_page, **self.stats_page)
+
+            ofile_stats_session = os.path.join(BASEPATH_STATS, "session_{}.tsv.gz".format(self.interval))
+            yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_session, **self.stats_session)
+
             ofile_stats_cookie = os.path.join(BASEPATH_STATS, "cookie_{}.tsv.gz".format(self.interval))
             yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_cookie, **self.stats_cookie)
 
             ofile_stats_website = os.path.join(BASEPATH_STATS, "website_{}.tsv.gz".format(self.interval))
             yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_website, **self.stats_website)
-
-            for hour in range(0, 24):
-                ofile_stats_page = os.path.join(BASEPATH_STATS, "page_{}{:02d}.tsv.gz".format(self.interval, hour))
-                yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_page, hour=hour, **self.stats_page)
-
-                ofile_stats_session = os.path.join(BASEPATH_STATS, "session_{}{:02d}.tsv.gz".format(self.interval, hour))
-                yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_session, hour=hour, **self.stats_session)
-
-                ofile_stats_cookie = os.path.join(BASEPATH_STATS, "cookie_{}{:02d}.tsv.gz".format(self.interval, hour))
-                yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_cookie, hour=hour, **self.stats_cookie)
-
-                ofile_stats_website = os.path.join(BASEPATH_STATS, "website_{}{:02d}.tsv.gz".format(self.interval, hour))
-                yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_website, hour=hour, **self.stats_website)
 
             ofile_page_error = os.path.join(BASEPATH_ADV, "pageerror_{}.tsv.gz".format(self.interval))
             #yield RawPageError(interval=self.interval, ofile=ofile_page_error)
