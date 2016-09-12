@@ -4,12 +4,12 @@
 import gzip
 import json
 
-try
+try:
     from urlparse import urlparse
 except ImportError:
     from urllib.parse import urlparse
 
-from utils import SEP, ENCODE_UTF8, OTHER, FUNC
+from utils import SEP, ENCODE_UTF8, OTHER, FUNC, FUNC_NONE
 
 '''
 INPUT
@@ -72,9 +72,9 @@ def luigi_run(filepath, results={}):
                     results[domain]["page_view"] += 1
                     results[domain]["user_view"].add(cookie_id)
 
-                    results[domain]["duration"] += float(duration)
-                    results[domain]["active_duration"] += float(active_duration)
-                    results[domain]["loading_duration"] += float(loading_duration)
+                    results[domain]["duration"] += FUNC_NONE(duration)
+                    results[domain]["active_duration"] += FUNC_NONE(active_duration)
+                    results[domain]["loading_duration"] += FUNC_NONE(loading_duration)
 
                     if session_id != session:
                         results[domain]["count_session"] += 1

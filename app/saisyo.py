@@ -29,7 +29,7 @@ FILEPATH_CATEGORY = os.path.join(BASEPATH, "data", "setting", "category.tsv")
 class ClickstreamFirstRaw(luigi.Task):
     task_namespace = "clickstream"
 
-    date = luigi.Parameter()
+    date = luigi.DateParameter()
     hour = luigi.IntParameter()
 
     ofile = luigi.Parameter()
@@ -152,7 +152,7 @@ class RawPath(luigi.Task):
                                               ofile=ofile.format(basepath=BASEPATH_TEMP, date=date, hour="{:02d}".format(hour)),
                                               columns=self.columns)
         else:
-            yield ClickstreamFirstRaw(date=str(self.interval), hour=self.hour,
+            yield ClickstreamFirstRaw(date=datetime.datetime.strptime(str(self.interval), "%Y-%m-%d"), hour=self.hour,
                                       ofile=ofile.format(basepath=BASEPATH_TEMP, date=str(self.interval), hour="{:02d}".format(self.hour)),
                                       columns=self.columns)
 

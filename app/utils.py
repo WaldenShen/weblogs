@@ -15,6 +15,7 @@ NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
 FUNC = lambda x, y: y + "_" + x if (x and x.lower() != "none" ) else y + "_" + OTHER
+FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 def load_category(filepath):
     results = {}

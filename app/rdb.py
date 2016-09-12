@@ -140,7 +140,7 @@ class SqlliteTable(luigi.Task):
         with gzip.open(self.ifile, "rb") as in_file:
             rows = []
             for line in in_file:
-                j = json.loads(line.strip())
+                j = json.loads(line.decode(ENCODE_UTF8).strip())
 
                 if sql is None:
                     columns = ",".join(j.keys())

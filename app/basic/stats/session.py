@@ -28,7 +28,7 @@ n_count               10
 
 
 def luigi_run(filepath, results={}):
-    global SEP, ENCODE_UTF8, INIT_R, FUNC
+    global SEP, ENCODE_UTF8, FUNC
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True

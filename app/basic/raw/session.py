@@ -88,5 +88,7 @@ def luigi_run(filepath, results={}):
     return results
 
 def luigi_dump(out_file, results, creation_datetime, date_type):
+    global ENCODE_UTF8
+
     for d in results.values():
-        out_file.write("{}\n".format(json.dumps(d)))
+        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
