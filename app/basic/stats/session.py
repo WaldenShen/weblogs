@@ -4,7 +4,7 @@
 import gzip
 import json
 
-from utils import SEP, ENCODE_UTF8, OTHER
+from utils import SEP, ENCODE_UTF8, OTHER, FUNC
 
 '''
 INPUT
@@ -26,14 +26,9 @@ creation_datetime     2016-09-01 10:16:19.283000
 n_count               10
 '''
 
-INIT_R = {"category_key": None,
-          "category_value": None,
-          "n_count": 0}
-
-FUNC = lambda x: x if (x and x.lower() != "none" ) else OTHER
 
 def luigi_run(filepath, results={}):
-    global SEP, ENCODE_UTF8, INIT_R, FUNC
+    global SEP, ENCODE_UTF8, FUNC
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
@@ -45,14 +40,18 @@ def luigi_run(filepath, results={}):
             else:
                 session_id, cookie_id, individual_id, _, url, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
 
-                logic = FUNC(logic)
-                function = FUNC(function)
-                intention = FUNC(intention)
+                logic = FUNC(logic, "logic")
+                function = FUNC(function, "function")
+                intention = FUNC(intention, "intention")
 
                 for name, value in zip(["logic", "function", "intention"], [logic, function , intention]):
                     key = name + "_" + value
 
-                    results.setdefault(key, INIT_R.copy())
+                    init_r = {"category_key": None,
+                              "category_value": None,
+                              "n_count": 0}
+
+                    results.setdefault(key, init_r)
                     results[key]["category_key"] = name
                     results[key]["category_value"] = value
 
@@ -66,7 +65,11 @@ def luigi_run(filepath, results={}):
                 for name, value in zip(["logic", "function", "intention"], [logic, function , intention]):
                     key = name + "_" + value
 
-                    piece.setdefault(key, INIT_R.copy())
+                    init_r = {"category_key": None,
+                              "category_value": None,
+                              "n_count": 0}
+
+                    piece.setdefault(key, init_r)
                     piece[key]["category_key"] = name
                     piece[key]["category_value"] = value
                     piece[key]["n_count"] += 1
@@ -80,8 +83,10 @@ def luigi_run(filepath, results={}):
     return results
 
 def luigi_dump(out_file, results, creation_datetime, date_type):
+    global ENCODE_UTF8
+
     for d in results.values():
         d["creation_datetime"] = creation_datetime
         d["date_type"] = date_type
 
-        out_file.write("{}\n".format(json.dumps(d)))
+        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))

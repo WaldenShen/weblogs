@@ -5,7 +5,7 @@ import gzip
 import json
 
 from utils import norm_url
-from utils import SEP, OTHER
+from utils import SEP, OTHER, ENCODE_UTF8, FUNC, FUNC_NONE
 
 '''
 INPUT
@@ -30,14 +30,12 @@ active_duration     51930.0
 loading_duration    10935.3
 '''
 
-FUNC = lambda x: x if (x and x.lower() != "none" ) else OTHER
-
 def set_record(results, cookie_id, url, logic, function, intention, duration, active_duration, loading_duration):
     global OTHER, FUNC
 
-    logic = FUNC(logic)
-    function = FUNC(function)
-    intention = FUNC(intention)
+    logic = FUNC(logic, "logic")
+    function = FUNC(function, "function")
+    intention = FUNC(intention, "intention")
 
     for key_type, key in zip(["url", "logic", "function", "intention"], [url, logic, function, intention]):
         # implement your logic
@@ -55,9 +53,9 @@ def set_record(results, cookie_id, url, logic, function, intention, duration, ac
         results[key]["url_type"] = key_type
         results[key]["page_view"] += 1
         results[key]["user_view"].add(cookie_id)
-        results[key]["duration"] += float(duration)
-        results[key]["active_duration"] += float(active_duration)
-        results[key]["loading_duration"] += float(loading_duration)
+        results[key]["duration"] += FUNC_NONE(duration)
+        results[key]["active_duration"] += FUNC_NONE(active_duration)
+        results[key]["loading_duration"] += FUNC_NONE(loading_duration)
 
 def luigi_run(filepath, results={}):
     global SEP
@@ -68,7 +66,7 @@ def luigi_run(filepath, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.strip().split(SEP)
+                session_id, cookie_id, individual_id, _, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
 
                 set_record(results, cookie_id, norm_url(url), logic, function, intention, duration, active_duration, loading_duration)
 
@@ -81,4 +79,4 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
 
         d["user_view"] = len(d["user_view"])
 
-        out_file.write("{}\n".format(json.dumps(d)))
+        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))

@@ -4,8 +4,12 @@
 import gzip
 import json
 
-from urlparse import urlparse
-from utils import SEP, ENCODE_UTF8, OTHER
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
+
+from utils import SEP, ENCODE_UTF8, OTHER, FUNC, FUNC_NONE
 
 '''
 INPUT
@@ -36,7 +40,7 @@ count_intention     {"旅遊": 1, "有車": 5}
 '''
 
 def luigi_run(filepath, results={}):
-    global SEP, OTHER, ENCODE_UTF8, INIT_R
+    global SEP, OTHER, ENCODE_UTF8, INIT_R, FUNC
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
@@ -68,22 +72,23 @@ def luigi_run(filepath, results={}):
                     results[domain]["page_view"] += 1
                     results[domain]["user_view"].add(cookie_id)
 
-                    results[domain]["duration"] += float(duration)
-                    results[domain]["active_duration"] += float(active_duration)
-                    results[domain]["loading_duration"] += float(loading_duration)
+                    results[domain]["duration"] += FUNC_NONE(duration)
+                    results[domain]["active_duration"] += FUNC_NONE(active_duration)
+                    results[domain]["loading_duration"] += FUNC_NONE(loading_duration)
 
                     if session_id != session:
                         results[domain]["count_session"] += 1
 
-                    logic = logic if (logic and logic.lower() != "none") else OTHER
+                    logic = FUNC(logic, "logic")
+                    function = FUNC(function, "function")
+                    intention = FUNC(intention, "intention")
+
                     results[domain]["count_logic"].setdefault(logic, 0)
                     results[domain]["count_logic"][logic] += 1
 
-                    function = function if (function and function.lower() != "none") else OTHER
                     results[domain]["count_function"].setdefault(function, 0)
                     results[domain]["count_function"][function] += 1
 
-                    intention = intention if (intention and intention.lower() != "none") else OTHER
                     results[domain]["count_intention"].setdefault(intention, 0)
                     results[domain]["count_intention"][intention] += 1
 
@@ -92,6 +97,8 @@ def luigi_run(filepath, results={}):
     return results
 
 def luigi_dump(out_file, results, creation_datetime, date_type):
+    global ENCODE_UTF8
+
     for d in results.values():
         d["creation_datetime"] = creation_datetime
         d["date_type"] = date_type
@@ -102,4 +109,4 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
         d["count_function"] = json.dumps(d["count_function"])
         d["count_intention"] = json.dumps(d["count_intention"])
 
-        out_file.write("{}\n".format(json.dumps(d)))
+        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))

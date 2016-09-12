@@ -88,4 +88,4 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
 
     for d in df.values():
         #out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE))
-        out_file.write("{}\n".format(json.dumps(d)))
+        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))

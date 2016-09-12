@@ -90,10 +90,10 @@ class Raw(luigi.Task):
                 yield SimpleDynamicTask(interval=interval, ofile=ofile_raw_cookie, **self.raw_cookie)
 
                 ofile_stats_page = os.path.join(BASEPATH_STATS, "page_{}.tsv.gz".format(str(date)))
-                yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_page, **self.stats_page)
+                yield SimpleDynamicTask(interval=interval, ofile=ofile_stats_page, **self.stats_page)
 
                 ofile_stats_session = os.path.join(BASEPATH_STATS, "session_{}.tsv.gz".format(str(date)))
-                yield SimpleDynamicTask(interval=self.interval, ofile=ofile_stats_session, **self.stats_session)
+                yield SimpleDynamicTask(interval=interval, ofile=ofile_stats_session, **self.stats_session)
 
                 ofile_stats_cookie = os.path.join(BASEPATH_STATS, "cookie_{}.tsv.gz".format(str(date)))
                 yield SimpleDynamicTask(interval=interval, ofile=ofile_stats_cookie, **self.stats_cookie)
@@ -145,11 +145,10 @@ class RDBStatsTask(luigi.Task):
                         table = "stats_{}".format(stats_type)
                         yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-                        if hour == 0:
-                            ifile = os.path.join(BASEPATH_STATS, "{}_{}.tsv.gz".format(stats_type, str(date)))
-                            ofile = os.path.join(BASEPATH_DB, "{}_{}.tsv.gz".format(stats_type, str(date)))
+                    ifile = os.path.join(BASEPATH_STATS, "{}_{}.tsv.gz".format(stats_type, str(date)))
+                    ofile = os.path.join(BASEPATH_DB, "{}_{}.tsv.gz".format(stats_type, str(date)))
 
-                            table = "stats_{}".format(stats_type)
-                            yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+                    table = "stats_{}".format(stats_type)
+                    yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplemented
