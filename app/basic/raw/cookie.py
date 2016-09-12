@@ -53,15 +53,15 @@ def set_record(results, creation_datetime, cookie_id, individual_id, logic, func
     results[cookie_id]["active_duration"] += FUNC_NONE(active_duration)
     results[cookie_id]["loading_duration"] += FUNC_NONE(loading_duration)
 
-    logic = FUNC(logic)
+    logic = FUNC(logic, "logic")
     results[cookie_id]["logic"].setdefault(logic, 0)
     results[cookie_id]["logic"][logic] += 1
 
-    function = FUNC(function)
+    function = FUNC(function, "function")
     results[cookie_id]["function"].setdefault(function, 0)
     results[cookie_id]["function"][function] += 1
 
-    intention = FUNC(intention)
+    intention = FUNC(intention, "intention")
     results[cookie_id]["intention"].setdefault(intention, 0)
     results[cookie_id]["intention"][intention] += 1
 
