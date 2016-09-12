@@ -4,7 +4,7 @@
 import gzip
 import json
 
-from utils import SEP, ENCODE_UTF8, OTHER
+from utils import SEP, ENCODE_UTF8, FUNC, FUNC_NONE
 
 '''
 INPUT
@@ -30,31 +30,28 @@ function                    {"登入": 1, "查詢": 2}
 intention                   {"旅遊": 1, "有車": 5}
 '''
 
-INIT_R = {"cookie_id": None,
-          "individual_id": None,
-          "creation_datetime": None,
-          "duration": 0,
-          "active_duration": 0,
-          "loading_duration": 0,
-          "logic": {},
-          "function": {},
-          "intention": {},}
-
-FUNC = lambda x: x if (x and x.lower() != "none" ) else OTHER
 
 def set_record(results, creation_datetime, cookie_id, individual_id, logic, function, intention, duration, active_duration, loading_duration):
-    global INIT_R, OTHER, FUNC
+    init_r = {"cookie_id": None,
+              "individual_id": None,
+              "creation_datetime": None,
+              "duration": 0,
+              "active_duration": 0,
+              "loading_duration": 0,
+              "logic": {},
+              "function": {},
+              "intention": {},}
 
-    results.setdefault(cookie_id, INIT_R.copy())
+    results.setdefault(cookie_id, init_r)
 
     results[cookie_id]["cookie_id"] = cookie_id
     results[cookie_id]["individual_id"] = individual_id
 
     results[cookie_id]["creation_datetime"] = creation_datetime
 
-    results[cookie_id]["duration"] += float(duration)
-    results[cookie_id]["active_duration"] += float(active_duration)
-    results[cookie_id]["loading_duration"] += float(loading_duration)
+    results[cookie_id]["duration"] += FUNC_NONE(duration)
+    results[cookie_id]["active_duration"] += FUNC_NONE(active_duration)
+    results[cookie_id]["loading_duration"] += FUNC_NONE(loading_duration)
 
     logic = FUNC(logic)
     results[cookie_id]["logic"].setdefault(logic, 0)

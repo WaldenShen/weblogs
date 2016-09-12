@@ -4,7 +4,7 @@
 import gzip
 import json
 
-from utils import SEP, ENCODE_UTF8, OTHER
+from utils import SEP, ENCODE_UTF8, FUNC, FUNC_NONE
 
 '''
 INPUT
@@ -31,44 +31,41 @@ intention               {"旅遊": 1, "有車": 5}
 count_event             -- 先忽略
 '''
 
-INIT_R = {"session_id": None,
-          "cookie_id": None,
-          "individual_id": None,
-          "duration": 0,
-          "active_duration": 0,
-          "loading_duration": 0,
-          "chain_length": 0,
-          "logic": {},
-          "function": {},
-          "intention": {},
-          "count_event": 0}
 
 def set_record(results, session_id, cookie_id, individual_id, creation_datetime, logic, function, intention, duration, active_duration, loading_duration):
-    global INIT_R, OTHER
+    init_r = {"session_id": None,
+              "cookie_id": None,
+              "individual_id": None,
+              "duration": 0,
+              "active_duration": 0,
+              "loading_duration": 0,
+              "chain_length": 0,
+              "logic": {},
+              "function": {},
+              "intention": {},
+              "count_event": 0}
 
-    results.setdefault(session_id, INIT_R.copy())
-
-    results.setdefault(session_id, INIT_R.copy())
+    results.setdefault(session_id, init_r)
     results[session_id]["session_id"] = session_id
     results[session_id]["cookie_id"] = cookie_id
     results[session_id]["individual_id"] = individual_id
     results[session_id]["creation_datetime"] = creation_datetime
 
-    results[session_id]["duration"] += float(duration)
-    results[session_id]["active_duration"] += float(active_duration)
-    results[session_id]["loading_duration"] += float(active_duration)
+    results[session_id]["duration"] += FUNC_NONE(duration)
+    results[session_id]["active_duration"] += FUNC_NONE(active_duration)
+    results[session_id]["loading_duration"] += FUNC_NONE(active_duration)
 
     results[session_id]["chain_length"] += 1
 
-    logic = logic if (logic and logic.lower() != "none") else OTHER
+    logic = FUNC(logic, "logic")
     results[session_id]["logic"].setdefault(logic, 0)
     results[session_id]["logic"][logic] += 1
 
-    function = function if (function and function.lower() != "none") else OTHER
+    function = FUNC(function, "function")
     results[session_id]["function"].setdefault(function, 0)
     results[session_id]["function"][function] += 1
 
-    intention = intention if (intention and intention.lower() != "none") else OTHER
+    intention = FUNC(intention, "intention")
     results[session_id]["intention"].setdefault(intention, 0)
     results[session_id]["intention"][intention] += 1
 
