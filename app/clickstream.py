@@ -31,6 +31,8 @@ class Raw(luigi.Task):
     raw_session = luigi.DictParameter(default={"lib": "basic.raw.session", "mode": "dict"})
     raw_cookie = luigi.DictParameter(default={"lib": "basic.raw.cookie", "mode": "dict"})
 
+    adv_corr = luigi.DictParameter(default={"lib": "advanced.page.correlation", "length": 4})
+
     stats_page = luigi.DictParameter(default={"lib": "basic.stats.page", "mode": "dict"})
     stats_session = luigi.DictParameter(default={"lib": "basic.stats.session", "mode": "dict"})
     stats_cookie = luigi.DictParameter(default={"lib": "basic.stats.cookie", "mode": "dict"})
@@ -40,8 +42,9 @@ class Raw(luigi.Task):
         global BASEPATH_DB, BASEPATH_RAW, BASEPATH_ADV, BASEPATH_STATS
 
         if self.mode == "single":
-            ofile_page_corr = os.path.join(BASEPATH_DB, "pagecorrelation_{}.tsv.gz".format(self.interval))
-            #yield InsertPageCorrTask(interval=self.interval, ofile=ofile_page_corr, **self.corr)
+            for note_type in ["url", "logic", "function", "intention"]:
+                ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, self.interval))
+                yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, node_type=node_type, **self.adv_corr)
 
             ofile_common_path = os.path.join(BASEPATH_ADV, "common_path_{}.tsv.gz".format(self.interval))
             #yield CommonPathTask(interval=self.interval, ofile=ofile_common_path)
@@ -70,10 +73,11 @@ class Raw(luigi.Task):
             for date in self.interval:
                 interval = d.Date.parse(str(date))
 
-                ofile_page_corr = os.path.join(BASEPATH_DB, "pagecorrelation_{}.tsv.gz".format(str(date)))
-                #yield InsertPageCorrTask(interval=interval, ofile=ofile_page_corr, **self.corr)
+                for node_type in ["url", "logic", "function", "intention"]:
+                    ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, str(date)))
+                    yield PageCorrTask(ofile=ofile_page_corr, interval=interval, node_type=node_type, **self.adv_corr)
 
-                ofile_common_path = os.path.join(BASEPATH_ADV, "common_path_{}.tsv.gz".format(self.interval))
+                ofile_common_path = os.path.join(BASEPATH_ADV, "common_path_{}.tsv.gz".format(str(date)))
                 #yield CommonPathTask(interval=interval, ofile=ofile_common_path)
 
                 ofile_raw_session = os.path.join(BASEPATH_RAW, "session_{}.tsv.gz".format(str(date)))
@@ -95,6 +99,10 @@ class Raw(luigi.Task):
                 yield SimpleDynamicTask(interval=interval, ofile=ofile_stats_website, **self.stats_website)
 
                 for hour in range(0, 24):
+                    for node_type in ["url", "logic", "function", "intention"]:
+                        ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}{:02d}.csv.gz".format(node_type, str(date), hour))
+                        yield PageCorrTask(ofile=ofile_page_corr, interval=interval, hour=hour, node_type=node_type, **self.adv_corr)
+
                     ofile_stats_page = os.path.join(BASEPATH_STATS, "page_{}{:02d}.tsv.gz".format(str(date), hour))
                     yield SimpleDynamicTask(interval=interval, ofile=ofile_stats_page, hour=hour, **self.stats_page)
 
@@ -128,6 +136,13 @@ class RDBStatsTask(luigi.Task):
 
                 table = "stats_{}".format(stats_type)
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+            for node_type in ["url", "logic", "function", "intention"]:
+                ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, interval))
+                ofile = os.path.join(BASEPATH_DB, "{}corr_{}.csv.gz".format(node_type, interval))
+
+                table = "adv_pagecorr"
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         elif self.mode.lower() == "range":
             for stats_type in ["page", "session", "cookie", "website"]:
                 for date in self.interval:
@@ -142,6 +157,20 @@ class RDBStatsTask(luigi.Task):
                     ofile = os.path.join(BASEPATH_DB, "{}_{}.tsv.gz".format(stats_type, str(date)))
 
                     table = "stats_{}".format(stats_type)
+                    yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+            table = "adv_pagecorr"
+            for node_type in ["url", "logic", "function", "intention"]:
+                for date in self.interval:
+                    for hour in range(0, 24):
+                        ifile = os.path.join(BASEPATH_ADV, "{}corr_{}{:02d}.csv.gz".format(node_type, str(date), hour))
+                        ofile = os.path.join(BASEPATH_DB, "{}corr_{}{:02d}.csv.gz".format(node_type, str(date), hour))
+
+                        yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+                    ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, str(date)))
+                    ofile = os.path.join(BASEPATH_DB, "{}corr_{}.csv.gz".format(node_type, str(date)))
+
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplemented

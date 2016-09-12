@@ -118,12 +118,10 @@ class ClickstreamFirstRaw(luigi.Task):
                 logger.warn(e)
 
         with self.output().open('wb') as out_file:
-            #out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
             out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
 
             for session_id, info in results.items():
                 for row in info:
-                    #out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
                     out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
 
         # close connection
@@ -188,7 +186,6 @@ class RawPath(luigi.Task):
 
                         if pre_session_number is not None and pre_session_number != session_number:
                             out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
-                            #out_file.write("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP))
 
                             pages = []
 
@@ -197,7 +194,6 @@ class RawPath(luigi.Task):
                         pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
 
             out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
-            #out_file.write("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP))
 
     def output(self):
         global BASEPATH_RAW
@@ -305,7 +301,7 @@ class SimpleDynamicTask(RawPath):
 
                     creation_datetime, date_type = get_date_type(self.output().fn)
                     for row in mod.luigi_run(input.fn):
-                        out_file.write("{}\n".format(json.dumps(row)))
+                        out_file.write(bytes("{}\n".format(json.dumps(row)), ENCODE_UTF8))
         else:
             raise NotImplemented
 
