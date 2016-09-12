@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 
 from pandas import DataFrame
+from utils import norm_url, FUNC, SEP
 
 SESSION = 'session_id'
 PAGELINK = 'url'
@@ -14,18 +15,14 @@ PAGESEQ = 'session_seq'
 EVENTTIMESTAMP = 'creation_datetime'
 
 
-def luigi_run(FILEPATH, chain_length=2, pagedict={}, pagecount={}):
+def luigi_run(FILEPATH, node_type=PAGELINK, chain_length=2, pagedict={}, pagecount={}):
     filepath = FILEPATH
 
-    sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, PAGELINK], sep="\t").sort_values([SESSION, PAGESEQ], ascending=[1,1])
+    sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, node_type], sep=SEP).sort_values([SESSION, PAGESEQ], ascending=[1,1])
 
     START = "start"
     EXIT = "exit"
     DL = len(sessionall) - 1
-
-    def norm_page(url):
-        end_idx = url.find("?")
-        return url[:end_idx if end_idx > -1 else len(url)]
 
     def next_page(pool, start_page, end_page, score):
         pool.setdefault(start_page, {}).setdefault(end_page, 0)
@@ -35,14 +32,24 @@ def luigi_run(FILEPATH, chain_length=2, pagedict={}, pagecount={}):
         pool.setdefault(start_page, 0)
         pool[start_page] += score
 
-    sessionall[PAGELINK] = sessionall[PAGELINK].apply(norm_page) # 只保留"?"之前的URL
+    if node_type == PAGELINK:
+        sessionall[node_type] = sessionall[node_type].apply(norm_url) # 只保留"?"之前的URL
+    elif node_type == "logic":
+        sessionall[node_type] = sessionall[node_type].apply(FUNC, args=("logic",))
+    elif node_type == "function":
+        sessionall[node_type] = sessionall[node_type].apply(FUNC, args=("function",))
+    elif node_type == "intention":
+        sessionall[node_type] = sessionall[node_type].apply(FUNC, args=("intention",))
 
     for count, line in enumerate(sessionall.values):
         session = line[0]
         seq = line[1]
-        start_page = line[2]
 
-        if start_page.find("https") == -1:
+        start_page = line[2]
+        if node_type != PAGELINK:
+            start_page = line[3]
+
+        if start_page.find("app") > -1:
             continue
 
         for level in range(0, chain_length):
@@ -50,11 +57,11 @@ def luigi_run(FILEPATH, chain_length=2, pagedict={}, pagecount={}):
 
             if count + level <= DL and session == sessionall[SESSION][count + level]:  # 往後 level 個page為同一個Session
                 if seq == 1:  # 網頁第一筆資料 session
-                    next_page(pagedict, START, sessionall[PAGELINK][count + level], score)
+                    next_page(pagedict, START, sessionall[node_type][count + level], score)
                     page_count(pagecount, START, score)
 
                 if count + level + 1 <= DL and session == sessionall[SESSION][count + level + 1]:
-                    next_page(pagedict, start_page, sessionall[PAGELINK][count + level + 1], score)
+                    next_page(pagedict, start_page, sessionall[node_type][count + level + 1], score)
                     page_count(pagecount, start_page, score)
                 else:
                     next_page(pagedict, start_page, EXIT, score)
@@ -87,11 +94,18 @@ def get_json(df, node_type, date_type, interval, length):
                  "url_type": node_type,
                  "date_type": date_type,
                  "creation_datetime": interval,
-                 "count": count[0],
+                 "n_count": count[0],
                  "percentage": count[1],
                  "chain_length": length}
 
             yield d
 
 if __name__ == "__main__":
-    Correlation("/Users/yehben/Desktop/Page_expose.txt","/Users/yehben/Desktop/output.csv",3)
+    length = 4
+    node_type = "intention"
+    filepath = "../data/temp/page_2016-09-01_10.csv.gz"
+
+    df = luigi_run(filepath, node_type, length)
+
+    for d in get_json(df, node_type, "hour", "2016-09-01", length):
+        print d

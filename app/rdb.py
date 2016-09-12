@@ -153,6 +153,7 @@ class SqlliteTable(luigi.Task):
 
         with self.output().open("wb") as out_file:
             out_file.write(bytes("{} - {}\n".format(len(rows), sql), ENCODE_UTF8))
+            #out_file.write("{} - {}\n".format(len(rows), sql))
 
         conn.commit()
         conn.close()
