@@ -149,7 +149,8 @@ class SqlliteTable(luigi.Task):
 
                 rows.append(tuple(j.values()))
 
-            cursor.executemany(sql, rows)
+            if rows:
+                cursor.executemany(sql, rows)
 
         with self.output().open("wb") as out_file:
             out_file.write(bytes("{} - {}\n".format(len(rows), sql), ENCODE_UTF8))

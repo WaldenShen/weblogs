@@ -42,7 +42,7 @@ class Raw(luigi.Task):
         global BASEPATH_DB, BASEPATH_RAW, BASEPATH_ADV, BASEPATH_STATS
 
         if self.mode == "single":
-            for note_type in ["url", "logic", "function", "intention"]:
+            for node_type in ["url", "logic", "function", "intention"]:
                 ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, self.interval))
                 yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, node_type=node_type, **self.adv_corr)
 
@@ -138,8 +138,8 @@ class RDBStatsTask(luigi.Task):
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
             for node_type in ["url", "logic", "function", "intention"]:
-                ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, interval))
-                ofile = os.path.join(BASEPATH_DB, "{}corr_{}.csv.gz".format(node_type, interval))
+                ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, self.interval))
+                ofile = os.path.join(BASEPATH_DB, "{}corr_{}.csv.gz".format(node_type, self.interval))
 
                 table = "adv_pagecorr"
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
