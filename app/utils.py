@@ -34,14 +34,14 @@ def load_category(filepath):
     ...
     ...
     '''
-    with open(filepath, "r") as in_file:
+    with open(filepath, "r", encoding=ENCODE_UTF8) as in_file:
         is_header = True
 
         for line in in_file:
             if is_header:
                 is_header = False
             else:
-                info = re.split(",", line.decode(ENCODE_UTF8).strip().lower())
+                info = re.split(",", line.strip().lower())
 
                 website, product_1, product_2, function, intention, url = info
                 results.setdefault(url, {"logic": product_1 + "_" + product_2, "function": function, "intention": intention})
