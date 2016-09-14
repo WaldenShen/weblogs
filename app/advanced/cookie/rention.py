@@ -1,6 +1,7 @@
 #!/usr/bin/python
 #-*- coding: utf-8 -*-
 
+import sys
 import gzip
 import math
 import json
@@ -25,6 +26,7 @@ intention                   {"旅遊": 1, "有車": 5}
 
 OUTPUT
 ============================
+login_datetime      2016-09-01
 creation_datetime   2016-09-12
 return_1            0.3424
 return_2            0.2525
@@ -36,6 +38,7 @@ return_7
 return_14
 return_21
 return_28
+no_return
 '''
 
 
@@ -66,15 +69,26 @@ def luigi_run(filepath, results={}):
 def luigi_dump(out_file, df, creation_datetime, date_type):
     global ENCODE_UTF8
 
-    total_count = len(df)
+    results = {}
+    for cookie_id, dates in df.items():
+        results.setdefault(dates[0].strftime("%Y-%m-%d"), {"login_datetime": dates[0].strftime("%Y-%m-%d"),
+                                                           "creation_datetime": creation_datetime,
+                                                           "return_1": 0,
+                                                           "return_2": 0,
+                                                           "return_3": 0,
+                                                           "return_4": 0,
+                                                           "return_5": 0,
+                                                           "return_6": 0,
+                                                           "return_7": 0,
+                                                           "return_14": 0,
+                                                           "return_21": 0,
+                                                           "return_28": 0,
+                                                           "no_return": 0})
 
-    results = {"creation_datetime": creation_datetime}
-    for cookie_id, values in df.items():
-        if len(values) == 2:
-            diff = math.ceil(float((values[1] - values[0]).total_seconds()) / 86400)
-
-            if diff == 0:
-                print((cookie_id, values, (values[1] - values[0]).total_seconds()))
+        if len(dates) == 1:
+            results[dates[0].strftime("%Y-%m-%d")]["no_return"] += 1
+        else:
+            diff = math.ceil(float((dates[1] - dates[0]).total_seconds()) / 86400)
 
             key = None
             if diff <= 7:
@@ -86,11 +100,17 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
             else:
                 key = "return_28"
 
-            results.setdefault(key, 0)
-            results[key] += 1
+            results[dates[0].strftime("%Y-%m-%d")][key] += 1
 
-    for k, v in results.items():
-        if k.find("return") > -1:
-            results[k] = float(v) / total_count
+    for value in results.values():
+        out_file.write(bytes("{}\n".format(json.dumps(value)), ENCODE_UTF8))
 
-    out_file.write(bytes("{}\n".format(json.dumps(results)), ENCODE_UTF8))
+if __name__ == "__main__":
+    import glob
+
+    df = {}
+    for fn in sorted(glob.glob("../data/raw/cookie_2016-08-*.tsv.gz")):
+        df = luigi_run(fn, df)
+
+    with gzip.open("tt.tsv.gz", "wb") as out_file:
+        luigi_dump(out_file, df, "2016-08-01", "day")

@@ -24,6 +24,7 @@ intention                   {"旅遊": 1, "有車": 5}
 
 OUTPUT
 ============================
+login_datetime      2016-09-01
 creation_datetime   2016-09-12
 return_1            0.3424
 return_2            0.2525

@@ -39,7 +39,7 @@ count_function      {"登入": 1, "查詢": 2}
 count_intention     {"旅遊": 1, "有車": 5}
 '''
 
-def luigi_run(filepath, results={}):
+def luigi_run(filepath, is_first, results={}):
     global SEP, OTHER, ENCODE_UTF8, INIT_R, FUNC
 
     with gzip.open(filepath, "rb") as in_file:

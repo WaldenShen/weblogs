@@ -13,7 +13,7 @@ from luigi import date_interval as d
 
 from rdb import TeradataTable
 from utils import load_category, norm_url, get_date_type
-from utils import SEP, ENCODE_UTF8
+from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
 
@@ -254,9 +254,13 @@ class SimpleDynamicTask(RawPath):
 
         if self.mode.lower() == "dict":
             df = {}
+            is_first = True
+
             for input in self.input():
                 logger.info("Start to process {}".format(input.fn))
-                df = mod.luigi_run(input.fn, df)
+                df = mod.luigi_run(input.fn, is_first, df)
+
+                is_first = False
 
             with self.output().open("wb") as out_file:
                 creation_datetime, date_type = get_date_type(self.output().fn)

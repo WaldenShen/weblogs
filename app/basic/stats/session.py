@@ -27,7 +27,7 @@ n_count               10
 '''
 
 
-def luigi_run(filepath, results={}):
+def luigi_run(filepath, is_first, results={}):
     global SEP, ENCODE_UTF8, FUNC
 
     with gzip.open(filepath, "rb") as in_file:

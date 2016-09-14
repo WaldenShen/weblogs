@@ -57,7 +57,7 @@ def set_record(results, cookie_id, url, logic, function, intention, duration, ac
         results[key]["active_duration"] += FUNC_NONE(active_duration)
         results[key]["loading_duration"] += FUNC_NONE(loading_duration)
 
-def luigi_run(filepath, results={}):
+def luigi_run(filepath, is_first, results={}):
     global SEP
 
     with gzip.open(filepath, "rb") as in_file:

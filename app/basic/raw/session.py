@@ -69,7 +69,7 @@ def set_record(results, session_id, cookie_id, individual_id, creation_datetime,
     results[session_id]["intention"].setdefault(intention, 0)
     results[session_id]["intention"][intention] += 1
 
-def luigi_run(filepath, results={}):
+def luigi_run(filepath, is_first, results={}):
     global SEP, ENCODE_UTF8
 
     with gzip.open(filepath, "rb") as in_file:

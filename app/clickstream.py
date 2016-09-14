@@ -129,12 +129,13 @@ class AdvancedTask(luigi.Task):
                 ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(str(date)))
                 yield CommonPathTask(interval=interval, ofile=ofile_common_path)
 
-                ifiles = []
                 # 4 weeks data
+                ifiles = []
                 now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
-                for diff in range(28, -1, -1):
-                    ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format((now - datetime.timedelta(days=diff)).strftime("%Y-%m-%d")))
-                    ifiles.append(ifile)
+                for i in range(28, -1, -1):
+                    ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format((now - datetime.timedelta(days=i)).strftime("%Y-%m-%d")))
+                    if os.path.exists(ifile):
+                        ifiles.append(ifile)
 
                 ofile_retention_path = os.path.join(BASEPATH_ADV, "rention_{}.tsv.gz".format(str(date)))
                 yield RetentionTask(ifile=ifiles, ofile=ofile_retention_path)
