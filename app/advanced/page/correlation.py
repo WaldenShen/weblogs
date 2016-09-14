@@ -108,4 +108,4 @@ if __name__ == "__main__":
     df = luigi_run(filepath, node_type, length)
 
     for d in get_json(df, node_type, "hour", "2016-09-01", length):
-        print d
+        print(d)

@@ -10,7 +10,6 @@ import logging
 import jaydebeapi as jdbc
 
 from luigi import date_interval as d
-from advanced.page import suffix_tree
 
 from rdb import TeradataTable
 from utils import load_category, norm_url, get_date_type
@@ -199,37 +198,6 @@ class RawPath(luigi.Task):
         global BASEPATH_RAW
 
         return luigi.LocalTarget("{}/path_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
-
-class CommonPathTask(luigi.Task):
-    task_namespace = "clickstream"
-
-    ofile = luigi.Parameter()
-    interval = luigi.DateIntervalParameter()
-
-    def requires(self):
-        yield RawPath(interval=self.interval)
-
-    def run(self):
-        common_path = suffix_tree.CommonPath()
-
-        for input in self.input():
-            with input.open("rb") as in_file:
-                is_header = True
-
-                for line in in_file:
-                    if is_header:
-                        is_header = False
-                    else:
-                        session_id, _, _, path = line.decode(ENCODE_UTF8).strip().split(SEP)
-                        common_path.plant_tree(session_id, path.split(NEXT))
-
-        with self.output().open("wb") as out_file:
-            for session_ids, paths in common_path.print_tree():
-                out_file.write(bytes("{}\n".format(SEP.join(session_ids)), ENCODE_UTF8))
-                out_file.write(bytes("{}\n".format(SEP.join(paths)), ENCODE_UTF8))
-
-    def output(self):
-        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
 class RawPageError(luigi.Task):
     task_namespace = "clickstream"
