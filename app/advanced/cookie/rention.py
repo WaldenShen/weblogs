@@ -58,7 +58,7 @@ def luigi_run(filepath, results={}):
 
     return results
 
-def luigi_dump(out_file, df, creation_datetime):
+def luigi_dump(out_file, df, creation_datetime, date_type):
     global ENCODE_UTF8
 
     total_count = len(df)
