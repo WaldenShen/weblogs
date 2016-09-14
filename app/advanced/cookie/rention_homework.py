@@ -60,3 +60,14 @@ def luigi_dump(out_file, df, creation_datetime):
     # implement your logic
 
     out_file.write(bytes("{}\n".format(json.dumps(results)), ENCODE_UTF8))
+
+if __name__ == "__main__":
+    import glob
+
+    df = {}
+    for f in glob.iglob("../data/raw/cookie_2016-08-*gz"):
+        print(f)
+        df = luigi_run(f, df)
+
+    for cookie_id, values in df.items():
+        print((cookie_id, values))

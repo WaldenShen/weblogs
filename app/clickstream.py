@@ -198,5 +198,12 @@ class RDBStatsTask(luigi.Task):
                     ofile = os.path.join(BASEPATH_DB, "{}corr_{}.csv.gz".format(node_type, str(date)))
 
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+            table = "adv_retention"
+            for date in self.interval:
+                ifile = os.path.join(BASEPATH_ADV, "rention_{}.csv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_DB, "rention_{}.csv.gz".format(str(date)))
+
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplementedError
