@@ -6,7 +6,7 @@ import logging
 
 import luigi
 
-from page import PageCorrTask
+from complex import PageCorrTask
 from rdb import TeradataInsertTable
 
 logger = logging.getLogger('luigi-interface')

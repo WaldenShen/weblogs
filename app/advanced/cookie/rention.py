@@ -50,7 +50,11 @@ def luigi_run(filepath, results={}):
                 o = json.loads(line.strip().decode(ENCODE_UTF8))
 
                 cookie_id = o["cookie_id"]
-                creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S.%f")
+                creation_datetime = None
+                if o["creation_datetime"].find(".") > -1:
+                    creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S.%f")
+                else:
+                    creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S")
 
                 results.setdefault(cookie_id, [])
                 if len(results[cookie_id]) < 2:
@@ -66,7 +70,7 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
     results = {"creation_datetime": creation_datetime}
     for values in df.values():
         if len(values) == 2:
-            diff = (values[1] - values[0]).day
+            diff = (values[1] - values[0]).days
 
             key = None
             if diff <= 7:

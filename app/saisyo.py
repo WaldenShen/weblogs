@@ -13,7 +13,7 @@ from luigi import date_interval as d
 
 from rdb import TeradataTable
 from utils import load_category, norm_url, get_date_type
-from utils import SEP, NEXT, ENCODE_UTF8
+from utils import SEP, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
 

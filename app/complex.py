@@ -6,7 +6,7 @@ import logging
 
 from saisyo import RawPath
 from advanced.page import suffix_tree
-from utils import get_date_type, ENCODE_UTF8
+from utils import get_date_type, SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
 
@@ -72,16 +72,20 @@ class PageCorrTask(RawPath):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
 class RetentionTask(luigi.Task):
-    task_namespace = "clickstream":
+    task_namespace = "clickstream"
+
+    lib = luigi.Parameter(default="advanced.cookie.rention")
 
     ifile = luigi.ListParameter()
     ofile = luigi.Parameter()
 
     def run(self):
+        mod = __import__(self.lib, fromlist=[""])
+
         df = {}
-        for input in self.ifile:
-            logger.info("Start to process {}".format(input.fn))
-            df = mod.luigi_run(input.fn, df)
+        for fn in self.ifile:
+            logger.info("Start to process {}".format(fn))
+            df = mod.luigi_run(fn, df)
 
         with self.output().open("wb") as out_file:
             creation_datetime, date_type = get_date_type(self.output().fn)
@@ -90,5 +94,3 @@ class RetentionTask(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
-
-

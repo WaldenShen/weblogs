@@ -4,6 +4,7 @@ import os
 import glob
 import luigi
 import logging
+import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
@@ -20,7 +21,7 @@ BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
 
 
-class Raw(luigi.Task):
+class RawTask(luigi.Task):
     task_namespace = "clickstream"
 
     mode = luigi.Parameter(default="range")
@@ -118,27 +119,30 @@ class AdvancedTask(luigi.Task):
             ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(self.interval))
             yield CommonPathTask(interval=self.interval, ofile=ofile_common_path)
         elif self.mode.lower() == "range":
-            interval = d.Date.parse(str(date))
+            for date in self.interval:
+                interval = d.Date.parse(str(date))
 
-            for node_type in ["url", "logic", "function", "intention"]:
-                ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, str(date)))
-                yield PageCorrTask(ofile=ofile_page_corr, interval=interval, node_type=node_type, **self.adv_corr)
-
-            ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(str(date)))
-            yield CommonPathTask(interval=interval, ofile=ofile_common_path)
-
-            ifiles = []
-            for date in :
-                ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tar.gz".format(str(date)))
-                ifiles.append(ifile)
-
-            ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
-            yield RetentionTask(ifile=ifiles, ofile=ofile_retention_path)
-
-            for hour in range(0, 24):
                 for node_type in ["url", "logic", "function", "intention"]:
-                    ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}{:02d}.csv.gz".format(node_type, str(date), hour))
-                    yield PageCorrTask(ofile=ofile_page_corr, interval=interval, hour=hour, node_type=node_type, **self.adv_corr)
+                    ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.csv.gz".format(node_type, str(date)))
+                    yield PageCorrTask(ofile=ofile_page_corr, interval=interval, node_type=node_type, **self.adv_corr)
+
+                ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(str(date)))
+                yield CommonPathTask(interval=interval, ofile=ofile_common_path)
+
+                ifiles = []
+                # 4 weeks data
+                now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
+                for diff in range(28, -1, -1):
+                    ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format((now - datetime.timedelta(days=diff)).strftime("%Y-%m-%d")))
+                    ifiles.append(ifile)
+
+                ofile_retention_path = os.path.join(BASEPATH_ADV, "rention_{}.tsv.gz".format(str(date)))
+                yield RetentionTask(ifile=ifiles, ofile=ofile_retention_path)
+
+                for hour in range(0, 24):
+                    for node_type in ["url", "logic", "function", "intention"]:
+                        ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}{:02d}.csv.gz".format(node_type, str(date), hour))
+                        yield PageCorrTask(ofile=ofile_page_corr, interval=interval, hour=hour, node_type=node_type, **self.adv_corr)
         else:
             raise NotImplementedError
 
