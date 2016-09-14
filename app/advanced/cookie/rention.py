@@ -2,6 +2,7 @@
 #-*- coding: utf-8 -*-
 
 import gzip
+import math
 import json
 import datetime
 
@@ -68,9 +69,12 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
     total_count = len(df)
 
     results = {"creation_datetime": creation_datetime}
-    for values in df.values():
+    for cookie_id, values in df.items():
         if len(values) == 2:
-            diff = (values[1] - values[0]).days
+            diff = math.ceil(float((values[1] - values[0]).total_seconds()) / 86400)
+
+            if diff == 0:
+                print((cookie_id, values, (values[1] - values[0]).total_seconds()))
 
             key = None
             if diff <= 7:
@@ -84,5 +88,9 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
 
             results.setdefault(key, 0)
             results[key] += 1
+
+    for k, v in results.items():
+        if k.find("return") > -1:
+            results[k] = float(v) / total_count
 
     out_file.write(bytes("{}\n".format(json.dumps(results)), ENCODE_UTF8))
