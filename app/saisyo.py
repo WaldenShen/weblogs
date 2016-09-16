@@ -271,9 +271,13 @@ class SimpleDynamicTask(RawPath):
 
         if self.mode.lower() == "dict":
             df = {}
+            is_first = True
+
             for input in self.input():
                 logger.info("Start to process {}".format(input.fn))
                 df = mod.luigi_run(input.fn, self.filter_app, df)
+
+                is_first = False
 
             with self.output().open("wb") as out_file:
                 creation_datetime, date_type = get_date_type(self.output().fn)

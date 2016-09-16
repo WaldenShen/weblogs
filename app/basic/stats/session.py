@@ -44,7 +44,6 @@ def luigi_run(filepath, filter_app=False, results={}):
                 if filter_app and is_app_log(url):
                     continue
 
-
                 logic = FUNC(logic, "logic")
                 function = FUNC(function, "function")
                 intention = FUNC(intention, "intention")
