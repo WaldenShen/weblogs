@@ -66,7 +66,10 @@ class TeradataInsertTable(luigi.Task):
         connection.close()
 
         with self.output().open("wb") as out_file:
-            out_file.write(bytes("Insert {} records - {}\n".format(count, self.sql), ENCODE_UTF8))
+            try:
+                out_file.write(bytes("Insert {} records - {}\n".format(count, self.sql), ENCODE_UTF8))
+            except:
+                out_file.write("Insert {} records - {}\n".format(count, self.sql))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
@@ -153,8 +156,10 @@ class SqlliteTable(luigi.Task):
                 cursor.executemany(sql, rows)
 
         with self.output().open("wb") as out_file:
-            out_file.write(bytes("{} - {}\n".format(len(rows), sql), ENCODE_UTF8))
-            #out_file.write("{} - {}\n".format(len(rows), sql))
+            try:
+                out_file.write(bytes("{} - {}\n".format(len(rows), sql), ENCODE_UTF8))
+            except:
+                out_file.write("{} - {}\n".format(len(rows), sql))
 
         conn.commit()
         conn.close()

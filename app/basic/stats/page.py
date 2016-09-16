@@ -4,7 +4,7 @@
 import gzip
 import json
 
-from utils import norm_url
+from utils import norm_url, is_app_log
 from utils import SEP, OTHER, ENCODE_UTF8, FUNC, FUNC_NONE
 
 '''
@@ -24,13 +24,14 @@ url_type            url / logic / function / intention
 date_type           hour / day / week / month / year
 creation_datetime   2016-09-01 10:00:00 / 2016-09-01 / 2016-W34 / 2016-09 / 2016
 page_view           1242
-user_viwe           734
+user_view           734
+profile_view        12
 duration            92525.0
 active_duration     51930.0
 loading_duration    10935.3
 '''
 
-def set_record(results, cookie_id, url, logic, function, intention, duration, active_duration, loading_duration):
+def set_record(results, cookie_id, profile_id, url, logic, function, intention, duration, active_duration, loading_duration):
     global OTHER, FUNC
 
     logic = FUNC(logic, "logic")
@@ -43,6 +44,7 @@ def set_record(results, cookie_id, url, logic, function, intention, duration, ac
                   "url_type": None,
                   "page_view": 0,
                   "user_view": set(),
+                  "profile_view": set(),
                   "duration": 0,
                   "active_duration": 0,
                   "loading_duration": 0}
@@ -53,11 +55,15 @@ def set_record(results, cookie_id, url, logic, function, intention, duration, ac
         results[key]["url_type"] = key_type
         results[key]["page_view"] += 1
         results[key]["user_view"].add(cookie_id)
+
+        if profile_id.lower() != "none":
+            results[key]["profile_view"].add(profile_id)
+
         results[key]["duration"] += FUNC_NONE(duration)
         results[key]["active_duration"] += FUNC_NONE(active_duration)
         results[key]["loading_duration"] += FUNC_NONE(loading_duration)
 
-def luigi_run(filepath, results={}):
+def luigi_run(filepath, filter_app=False, results={}):
     global SEP
 
     with gzip.open(filepath, "rb") as in_file:
@@ -68,7 +74,10 @@ def luigi_run(filepath, results={}):
             else:
                 session_id, cookie_id, individual_id, _, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
 
-                set_record(results, cookie_id, norm_url(url), logic, function, intention, duration, active_duration, loading_duration)
+                if filter_app and is_app_log(url):
+                    continue
+
+                set_record(results, cookie_id, individual_id, norm_url(url), logic, function, intention, duration, active_duration, loading_duration)
 
     return results
 
@@ -78,5 +87,9 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
         d["date_type"] = date_type
 
         d["user_view"] = len(d["user_view"])
+        d["profile_view"] = len(d["profile_view"])
 
-        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+        try:
+            out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+        except:
+            out_file.write("{}\n".format(json.dumps(d)))

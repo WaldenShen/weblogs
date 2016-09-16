@@ -66,7 +66,10 @@ class PageCorrTask(RawPath):
             creation_datetime, date_type = get_date_type(self.output().fn)
 
             for d in mod.get_json(df, self.node_type, date_type, str(self.interval), self.length):
-                out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+                try:
+                    out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+                except:
+                    out_file.write("{}\n".format(json.dumps(d)))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
@@ -74,7 +77,7 @@ class PageCorrTask(RawPath):
 class RetentionTask(luigi.Task):
     task_namespace = "clickstream"
 
-    lib = luigi.Parameter(default="advanced.cookie.rention")
+    lib = luigi.Parameter()
 
     ifile = luigi.ListParameter()
     ofile = luigi.Parameter()

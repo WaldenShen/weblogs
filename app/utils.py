@@ -48,6 +48,9 @@ def load_category(filepath):
 
     return results
 
+def is_app_log(log):
+    return log.startswith("app://") == 0
+
 def norm_url(url):
     start_idx = url.find("?")
     return url[:start_idx if start_idx > -1 else len(url)]

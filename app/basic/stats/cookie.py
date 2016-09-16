@@ -4,6 +4,7 @@
 import gzip
 import json
 
+from utils import is_app_log
 from utils import SEP, ENCODE_UTF8, OTHER, FUNC
 
 '''
@@ -27,7 +28,7 @@ n_count             10
 '''
 
 
-def luigi_run(filepath, results={}):
+def luigi_run(filepath, filter_app=False, results={}):
     global SEP, ENCODE_UTF8, OTHER, FUNC
 
     with gzip.open(filepath, "rb") as in_file:
@@ -37,6 +38,9 @@ def luigi_run(filepath, results={}):
                 is_header = False
             else:
                 session_id, cookie_id, individual_id, _, url, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
+
+                if filter_app and is_app_log(url):
+                    continue
 
                 logic = FUNC(logic, "logic")
                 function = FUNC(function, "function")
@@ -77,4 +81,7 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
         d["creation_datetime"] = creation_datetime
         d["date_type"] = date_type
 
-        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+        try:
+            out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+        except:
+            out_file.write("{}\n".format(json.dumps(d)))

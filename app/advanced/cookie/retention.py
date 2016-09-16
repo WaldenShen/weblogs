@@ -93,4 +93,7 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
         if k.find("return") > -1:
             results[k] = float(v) / total_count
 
-    out_file.write(bytes("{}\n".format(json.dumps(results)), ENCODE_UTF8))
+    try:
+        out_file.write(bytes("{}\n".format(json.dumps(results)), ENCODE_UTF8))
+    except:
+        out_file.write("{}\n".format(json.dumps(results)))
