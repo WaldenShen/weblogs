@@ -39,14 +39,14 @@ def luigi_run(filepath, filter_app=False, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, url, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
+                session_id, cookie_id, individual_id, _, url, _, f, l, i, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
 
                 if filter_app and is_app_log(url):
                     continue
 
-                logic = FUNC(logic, "logic")
-                function = FUNC(function, "function")
-                intention = FUNC(intention, "intention")
+                logic = FUNC(l, "logic")
+                function = FUNC(f, "function")
+                intention = FUNC(i, "intention")
 
                 for name, value in zip(["logic", "function", "intention"], [logic, function , intention]):
                     key = name + "_" + value

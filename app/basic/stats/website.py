@@ -24,21 +24,21 @@ session_id      cookie_id       individual_id   session_seq     url     creation
 
 OUTPUT
 ============================
-domain              https://www.cathaybk.com.tw
-date_type           hour / daily / week / month / year
-creation_datetime   2016-09-01 10:00:00 / 2016-09-01 / 2016-W34 / 2016-09 / 2016
-profile_view        0
-page_view           19734
-user_view           2712
-duration            3153021.0
-active_duration     1935515.0
-loading_duration    937515.0
-count_failed        -- 先忽略
-count_session       253515
-count_cookie        193152
-count_logic         {"理財": 12, "信貸": 1}
-count_function      {"登入": 1, "查詢": 2}
-count_intention     {"旅遊": 1, "有車": 5}
+domain                  https://www.cathaybk.com.tw
+date_type               hour / daily / week / month / year
+creation_datetime       2016-09-01 10:00:00 / 2016-09-01 / 2016-W34 / 2016-09 / 2016
+profile_view            0
+page_view               19734
+user_view               2712
+duration                3153021.0
+active_duration         1935515.0
+loading_duration        937515.0
+count_failed            -- 先忽略
+count_session           253515
+count_cookie            193152
+count_logic             {"理財": 12, "信貸": 1}
+count_function          {"登入": 1, "查詢": 2}
+count_intention         {"旅遊": 1, "有車": 5}
 '''
 
 def luigi_run(filepath, filter_app=False, results={}):

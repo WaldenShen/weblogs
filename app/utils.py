@@ -17,7 +17,7 @@ ENCODE_UTF8 = "UTF-8"
 
 COOKIE_HISTORY = "cookie_history"
 
-FUNC = lambda x, y: y + "_" + x if (x and isinstance(x, str) and x.lower() != "none" ) else y + "_" + OTHER
+FUNC = lambda x, y: y + "_" + x if (x and x.lower() != "none") else y + "_" + OTHER
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
@@ -55,7 +55,7 @@ def load_category(filepath):
     return results
 
 def is_app_log(log):
-    return log.startswith("app://") == 0
+    return log.startswith("app://")
 
 def norm_url(url):
     start_idx = url.find("?")

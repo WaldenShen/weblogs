@@ -93,3 +93,7 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
             out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
         except:
             out_file.write("{}\n".format(json.dumps(d)))
+
+if __name__ == "__main__":
+    filepath = "../data/temp/page_2016-09-01_10.csv.gz"
+    luigi_run(filepath)
