@@ -84,5 +84,7 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
     global ENCODE_UTF8
 
     for d in df.values():
-        #out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE))
-        out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
+        try:
+            out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE))
+        except:
+            out_file.write("{}\n".format(json.dumps(d)))

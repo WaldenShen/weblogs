@@ -8,6 +8,7 @@ import json
 import datetime
 
 from utils import SEP, ENCODE_UTF8
+from utils import load_cookie_id
 
 '''
 INPUT (schema JSON format)
@@ -41,6 +42,7 @@ return_28
 no_return
 '''
 
+pool = load_cookie_id()
 
 def luigi_run(filepath, results={}):
     global SEP, ENCODE_UTF8
@@ -60,8 +62,9 @@ def luigi_run(filepath, results={}):
                 else:
                     creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S")
 
-                results.setdefault(cookie_id, [])
-                if len(results[cookie_id]) < 2:
+                if creation_datetime <= pool[cookie_id][0]:
+                    results.setdefault(cookie_id, [creation_datetime])
+                elif cookie_id in results and len(results[cookie_id]) < 2:
                     results[cookie_id].append(creation_datetime)
 
     return results
@@ -71,27 +74,34 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
 
     results = {}
     for cookie_id, dates in df.items():
-        results.setdefault(dates[0].strftime("%Y-%m-%d"), {"login_datetime": dates[0].strftime("%Y-%m-%d"),
-                                                           "creation_datetime": creation_datetime,
-                                                           "return_1": 0,
-                                                           "return_2": 0,
-                                                           "return_3": 0,
-                                                           "return_4": 0,
-                                                           "return_5": 0,
-                                                           "return_6": 0,
-                                                           "return_7": 0,
-                                                           "return_14": 0,
-                                                           "return_21": 0,
-                                                           "return_28": 0,
-                                                           "no_return": 0})
+        date_key = dates[0].strftime("%Y-%m-%d")
+        results.setdefault(date_key, {"login_datetime": date_key,
+                                      "creation_datetime": creation_datetime,
+                                      "return_1": 0,
+                                      "return_2": 0,
+                                      "return_3": 0,
+                                      "return_4": 0,
+                                      "return_5": 0,
+                                      "return_6": 0,
+                                      "return_7": 0,
+                                      "return_14": 0,
+                                      "return_21": 0,
+                                      "return_28": 0,
+                                      "no_return": 0})
 
         if len(dates) == 1:
-            results[dates[0].strftime("%Y-%m-%d")]["no_return"] += 1
+            results[date_key]["no_return"] += 1
         else:
-            diff = math.ceil(float((dates[1] - dates[0]).total_seconds()) / 86400)
+            diff = int(math.ceil(float((dates[1] - dates[0]).total_seconds()) / 86400))
 
             key = None
-            if diff <= 7:
+            if diff <= 0:
+                #print((cookie_id, dates))
+                pass
+            elif diff <= 7:
+                #if diff == 1:
+                    #out_file.write("{} - {} - {} - {}\n".format(creation_datetime, cookie_id, date_key, diff))
+
                 key = "return_{}".format(diff)
             elif diff <= 14:
                 key = "return_14"
@@ -100,22 +110,23 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
             else:
                 key = "return_28"
 
-            results[dates[0].strftime("%Y-%m-%d")][key] += 1
+            results[date_key][key] += 1
 
     for value in results.values():
-        out_file.write(bytes("{}\n".format(json.dumps(value)), ENCODE_UTF8))
+        try:
+            out_file.write(bytes("{}\n".format(json.dumps(value)), ENCODE_UTF8))
+        except:
+            out_file.write("{}\n".format(json.dumps(value)))
 
 if __name__ == "__main__":
     import glob
 
     df = {}
-    for fn in sorted(glob.glob("../data/raw/cookie_2016-08-*.tsv.gz")):
-        df = luigi_run(fn, df)
+    for fn in sorted(glob.glob("../data/raw/cookie_2016-08-0*.tsv.gz")):
+        if fn.find("01") > -1 or fn.find("02") > -1 or fn.find("03") > -1 or fn.find("04") > -1:
+            df = luigi_run(fn, df)
 
-    try:
-        out_file.write(bytes("{}\n".format(json.dumps(results)), ENCODE_UTF8))
-    except:
-        out_file.write("{}\n".format(json.dumps(results)))
-
-    with gzip.open("tt.tsv.gz", "wb") as out_file:
-        luigi_dump(out_file, df, "2016-08-01", "day")
+    out_file = gzip.open("tt.tsv.gz", "wb")
+    luigi_dump(out_file, df, "2016-08-03", "day")
+    #for cookie_id, dates in df.items():
+    #    date_key = dates[0].strftime("%Y-%m-%d")

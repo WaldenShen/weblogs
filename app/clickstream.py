@@ -137,6 +137,8 @@ class AdvancedTask(luigi.Task):
                     ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format((now - datetime.timedelta(days=i)).strftime("%Y-%m-%d")))
                     if os.path.exists(ifile):
                         ifiles.append(ifile)
+                    else:
+                        logger.warn("Not found {} for retention calculation".format(ifile))
 
                 ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
                 yield RetentionTask(ifile=ifiles, ofile=ofile_retention_path, **self.adv_retention)
@@ -148,7 +150,7 @@ class AdvancedTask(luigi.Task):
         else:
             raise NotImplementedError
 
-class RDBStatsTask(luigi.Task):
+class RDBTask(luigi.Task):
     task_namespace = "clickstream"
 
     mode = luigi.Parameter(default="range")
