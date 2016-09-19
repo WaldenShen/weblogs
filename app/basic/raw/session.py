@@ -4,7 +4,8 @@
 import gzip
 import json
 
-from utils import SEP, ENCODE_UTF8, FUNC, FUNC_NONE
+from utils import parse_raw_page
+from utils import ENCODE_UTF8
 
 '''
 INPUT
@@ -25,14 +26,15 @@ creation_datetime       2016-09-01 10:16:19.283000
 duration                83695.0
 active_duration         29212.0
 chain_length            27
-logic                   {"理財": 12, "信貸": 1}
+logic1                   {"理財": 12, "信貸": 1}
+logic2
 function                {"登入": 1, "查詢": 2}
 intention               {"旅遊": 1, "有車": 5}
 count_event             -- 先忽略
 '''
 
 
-def set_record(results, session_id, cookie_id, individual_id, creation_datetime, logic, function, intention, duration, active_duration, loading_duration):
+def set_record(results, session_id, cookie_id, individual_id, creation_datetime, logic1, logic2, function, intention, duration, active_duration, loading_duration):
     init_r = {"session_id": None,
               "cookie_id": None,
               "individual_id": None,
@@ -40,7 +42,8 @@ def set_record(results, session_id, cookie_id, individual_id, creation_datetime,
               "active_duration": 0,
               "loading_duration": 0,
               "chain_length": 0,
-              "logic": {},
+              "logic1": {},
+              "logic2": {},
               "function": {},
               "intention": {},
               "count_event": 0}
@@ -51,34 +54,26 @@ def set_record(results, session_id, cookie_id, individual_id, creation_datetime,
     results[session_id]["individual_id"] = individual_id
     results[session_id]["creation_datetime"] = creation_datetime
 
-    results[session_id]["duration"] += FUNC_NONE(duration)
-    results[session_id]["active_duration"] += FUNC_NONE(active_duration)
-    results[session_id]["loading_duration"] += FUNC_NONE(active_duration)
+    results[session_id]["duration"] += duration
+    results[session_id]["active_duration"] += active_duration
+    results[session_id]["loading_duration"] += loading_duration
 
     results[session_id]["chain_length"] += 1
 
-    logic = FUNC(logic, "logic")
-    results[session_id]["logic"].setdefault(logic, 0)
-    results[session_id]["logic"][logic] += 1
-
-    function = FUNC(function, "function")
-    results[session_id]["function"].setdefault(function, 0)
-    results[session_id]["function"][function] += 1
-
-    intention = FUNC(intention, "intention")
-    results[session_id]["intention"].setdefault(intention, 0)
-    results[session_id]["intention"][intention] += 1
+    for key, value in zip(["logic1", "logic2", "function", "intention"], [logic1, logic2, function, intention]):
+        results[session_id][key].setdefault(value, 0)
+        results[session_id][key][value] += 1
 
 def luigi_run(filepath, is_first, results={}):
-    global SEP, ENCODE_UTF8
-
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, _, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
+                session_id, cookie_id, individual_id, _, url, creation_datetime,\
+                logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                duration, active_duration, loading_duration, _ = parse_raw_page(line)
 
                 set_record(results, session_id, cookie_id, individual_id, creation_datetime, logic, function, intention, duration, active_duration, loading_duration)
 

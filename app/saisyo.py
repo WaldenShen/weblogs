@@ -12,7 +12,7 @@ import jaydebeapi as jdbc
 from luigi import date_interval as d
 
 from rdb import TeradataTable
-from utils import load_category, norm_url, get_date_type, is_app_log
+from utils import norm_url, get_date_type, is_app_log
 from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
@@ -32,7 +32,7 @@ class ClickstreamFirstRaw(luigi.Task):
     hour = luigi.IntParameter()
 
     ofile = luigi.Parameter()
-    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
+    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,duration,active_duration,loading_time,ip")
 
     def run(self):
         global BASEPATH_DRIVER, FILEPATH_CATEGORY
@@ -40,8 +40,6 @@ class ClickstreamFirstRaw(luigi.Task):
         table = ""
         if self.date.month != datetime.datetime.now().month:
             table = "{}{:02d}".format(self.date.year, self.date.month)
-
-        category = load_category(FILEPATH_CATEGORY)
 
         results = {}
 
@@ -61,14 +59,9 @@ class ClickstreamFirstRaw(luigi.Task):
             try:
                 session_number, seq, url, creation_datetime, duration, active_duration, loading_duration = row
                 url = url.lower()
-                n_url = norm_url(url)
-
-                function, logic, intention = None, None, None
-                if n_url in category:
-                    function, logic, intention = category[n_url]["function"], category[n_url]["logic"], category[n_url]["intention"]
 
                 results.setdefault(session_number, [])
-                results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, "ip"])
+                results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, duration, active_duration, loading_duration, "ip"])
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
@@ -142,7 +135,7 @@ class RawPath(luigi.Task):
     def requires(self):
         global BASEPATH_TEMP
 
-        ofile = "{basepath}/page_{date}_{hour}.csv.gz"
+        ofile = "{basepath}/page_{date}_{hour}.tsv.gz"
         if self.hour == -1:
             for date in self.interval:
                 for hour in range(0, 24):
@@ -210,7 +203,7 @@ class RawPath(luigi.Task):
     def output(self):
         global BASEPATH_RAW
 
-        return luigi.LocalTarget("{}/path_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
+        return luigi.LocalTarget("{}/path_{}.tsv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
 
 class RawPageError(luigi.Task):
     task_namespace = "clickstream"
@@ -224,7 +217,7 @@ class RawPageError(luigi.Task):
 
         columns = "SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription"
         query = "SELECT SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription FROM VP_OP_ADC.pageerror{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59'"
-        ofile = "{}/page_error_{}_{}.csv.gz"
+        ofile = "{}/pageerror_{}_{}.tsv.gz"
 
         for date in self.interval:
             for hour in range(0, 24):

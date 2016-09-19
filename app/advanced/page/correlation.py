@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 
 from pandas import DataFrame
-from utils import norm_url, FUNC, SEP
+from utils import norm_url, _categorized_url, SEP
 
 SESSION = 'session_id'
 PAGELINK = 'url'
@@ -15,14 +15,14 @@ PAGESEQ = 'session_seq'
 EVENTTIMESTAMP = 'creation_datetime'
 
 
-def luigi_run(FILEPATH, node_type=PAGELINK, chain_length=2, pagedict={}, pagecount={}):
+def luigi_run(FILEPATH, node_type, chain_length=2, pagedict={}, pagecount={}):
     filepath = FILEPATH
 
-    sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, node_type], sep=SEP).sort_values([SESSION, PAGESEQ], ascending=[1,1])
+    sessionall = pd.read_csv(filepath, usecols=[SESSION, EVENTTIMESTAMP, PAGESEQ, PAGELINK], sep=SEP).sort_values([SESSION, PAGESEQ], ascending=[1,1])
 
     START = "start"
     EXIT = "exit"
-    DL = len(sessionall) - 1
+    DL = len(sessionall)-1
 
     def next_page(pool, start_page, end_page, score):
         pool.setdefault(start_page, {}).setdefault(end_page, 0)
@@ -34,12 +34,16 @@ def luigi_run(FILEPATH, node_type=PAGELINK, chain_length=2, pagedict={}, pagecou
 
     if node_type == PAGELINK:
         sessionall[node_type] = sessionall[node_type].apply(norm_url) # 只保留"?"之前的URL
+    elif node_type == "logic1":
+        sessionall[node_type] = sessionall[node_type].apply(_categorized_url, args=("logic1",))
+    elif node_type == "logic2":
+        sessionall[node_type] = sessionall[node_type].apply(_categorized_url, args=("logic2",))
     elif node_type == "logic":
-        sessionall[node_type] = sessionall[node_type].apply(FUNC, args=("logic",))
+        sessionall[node_type] = sessionall[node_type].apply(_categorized_url, args=("logic",))
     elif node_type == "function":
-        sessionall[node_type] = sessionall[node_type].apply(FUNC, args=("function",))
+        sessionall[node_type] = sessionall[node_type].apply(_categorized_url, args=("function",))
     elif node_type == "intention":
-        sessionall[node_type] = sessionall[node_type].apply(FUNC, args=("intention",))
+        sessionall[node_type] = sessionall[node_type].apply(_categorized_url, args=("intention",))
 
     for count, line in enumerate(sessionall.values):
         session = line[0]

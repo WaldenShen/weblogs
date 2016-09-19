@@ -16,13 +16,16 @@ ENCODE_UTF8 = "UTF-8"
 
 COOKIE_HISTORY = "cookie_history"
 
-FUNC = lambda x, y: y + "_" + x if (x and x.lower() != "none") else y + "_" + OTHER
+FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else y + "_" + OTHER
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 FILEPATH_COOKIE_ID = os.path.join(BASEPATH, "data", "setting", "cookie_history.pkl")
+FILEPATH_CATEGORY = os.path.join(BASEPATH, "data", "setting", "category.tsv")
 
-def load_category(filepath):
+CATEGORY_URL = load_category(FILEPATH_CATEGORY)
+
+def load_category(filepath=CATEGORY_URL):
     results = {}
 
     '''
@@ -59,6 +62,42 @@ def is_app_log(log):
 def norm_url(url):
     start_idx = url.find("?")
     return url[:start_idx if start_idx > -1 else len(url)].replace("http://", "https://")
+
+def _categorized_url(url, otype="all"):
+    global CATEGORY_URL, FUNC
+
+    n_url = norm_url(url)
+
+    logic1, logic2, function, intention = None, None, None, None
+    if n_url in CATEGORY_URL:
+        logic1, logic2, function, intention = CATEGORY_URL[n_url]["logic1"], CATEGORY_URL[n_url]["logic2"], CATEGORY_URL[n_url]["function"], CATEGORY_URL[n_url]["intention"]
+
+    if otype == "all":
+        return FUNC(logic1, "logic1"), FUNC(logic2, "logic2"), FUNC(function, "function"), FUNC(intention, "intention")
+    elif otype == "logic1":
+        return FUNC(logic1, "logic1")
+    elif otype == "logic2":
+        return FUNC(logic2, "logic2")
+    elif otype == "function":
+        return FUNC(function, "function")
+    elif otype == "intention":
+        return FUNC(intention, "intention")
+    elif otype == "logic":
+        return FUNC(logic1, "logic1") + "_" + FUNC(logic2, "logic2")
+
+def _rich_url(logic1, logic2, function, intention):
+    return "_",join([logic1, logic2]), "_".join([logic1, function]), "_".join([logic2, function]), "_".join([logic1, intention]), "_".join([logic2, intention])
+
+def parse_raw_page(line):
+    global ENCODE_UTF8, SEP, FUNC_NONE
+
+    session_id, cookie_id, individual_id, _, url, creation_datetime, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
+    logic1, logic2, function, intention = _categorized_url(url)
+    logic, logic1_function, logic2_function, logic1_intention, logic2_intention = _rich_url(logic1, logic2, function, intention)
+
+    return session_id, cookie_id, individual_id, url, creation_datetime,\
+           logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+           creation_datetime, FUNC_NONE(duration), FUNC_NONE(active_duration), FUNC_NONE(loading_duration)
 
 def get_date_type(filename):
     date = os.path.basename(filename).split("_")[1].split(".")[0]

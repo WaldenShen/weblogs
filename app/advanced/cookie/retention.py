@@ -20,7 +20,8 @@ duration                    26521.0
 active_duration             19511.0
 loading_duration            8351.0
 lifetime                    -- 先忽略
-logic                       {"理財": 12, "信貸": 1}
+logic1                      {"理財": 12, "信貸": 1}
+logic2
 function                    {"登入": 1, "查詢": 2}
 intention                   {"旅遊": 1, "有車": 5}
 
@@ -39,6 +40,7 @@ return_7
 return_14
 return_21
 return_28
+return_56
 no_return
 '''
 
@@ -96,19 +98,17 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
 
             key = None
             if diff <= 0:
-                #print((cookie_id, dates))
                 pass
             elif diff <= 7:
-                #if diff == 1:
-                    #out_file.write("{} - {} - {} - {}\n".format(creation_datetime, cookie_id, date_key, diff))
-
                 key = "return_{}".format(diff)
             elif diff <= 14:
                 key = "return_14"
             elif diff <= 21:
                 key = "return_21"
-            else:
+            elif diff <= 28:
                 key = "return_28"
+            else:
+                key = "return_56"
 
             results[date_key][key] += 1
 
