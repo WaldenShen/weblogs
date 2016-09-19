@@ -16,7 +16,7 @@ ENCODE_UTF8 = "UTF-8"
 
 COOKIE_HISTORY = "cookie_history"
 
-FUNC = lambda x, y: y + "_" + x if (x and x.lower() != "none") else y + "_" + OTHER
+FUNC = lambda x, y: y + "_" + x if (x and not isinstance(x, float) and x.lower() != "none") else y + "_" + OTHER
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
@@ -120,6 +120,7 @@ def create_cookie_history(filepath, pool={}):
 if __name__ == "__main__":
     import glob
 
+    '''
     df = {}
     filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
     for filepath in sorted(glob.glob(filepath_raw_cookie)):
@@ -128,9 +129,8 @@ if __name__ == "__main__":
             print("current filepath is {}".format(filepath))
 
     save_cookie_history(df)
-
     '''
-    results = load_cookie_id()
+
+    results = load_cookie_history()
     for cookie_id, creation_datetime in results.items():
         print((cookie_id, creation_datetime))
-    '''
