@@ -3,7 +3,7 @@
 
 import os
 import re
-
+import pickle
 import gzip
 import json
 import datetime
@@ -14,8 +14,13 @@ OTHER = "其他"
 NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
-FUNC = lambda x, y: y + "_" + x if (x and isinstance(x, str) and x.lower() != "none" ) else y + "_" + OTHER
+COOKIE_HISTORY = "cookie_history"
+
+FUNC = lambda x, y: y + "_" + x if (x and x.lower() != "none") else y + "_" + OTHER
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
+
+BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
+FILEPATH_COOKIE_ID = os.path.join(BASEPATH, "data", "setting", "cookie_history.pkl")
 
 def load_category(filepath):
     results = {}
@@ -48,9 +53,12 @@ def load_category(filepath):
 
     return results
 
+def is_app_log(log):
+    return log.startswith("app://")
+
 def norm_url(url):
     start_idx = url.find("?")
-    return url[:start_idx if start_idx > -1 else len(url)]
+    return url[:start_idx if start_idx > -1 else len(url)].replace("http://", "https://")
 
 def get_date_type(filename):
     date = os.path.basename(filename).split("_")[1].split(".")[0]
@@ -76,14 +84,53 @@ def print_json(filepath):
             j = json.loads(line.strip())
             pprint.pprint(j)
 
-if __name__ == "__main__":
-    import sys
+def load_cookie_history(filepath=FILEPATH_COOKIE_ID):
+    results = None
+    with open(filepath, "rb") as in_file:
+        results = pickle.load(in_file)
 
-    print_json(sys.argv[1])
+    return results
+
+def save_cookie_history(results, filepath=FILEPATH_COOKIE_ID):
+    with open(filepath, "wb") as out_file:
+        pickle.dump(results, out_file)
+
+def create_cookie_history(filepath, pool={}):
+    global ENCODE_UTF8, SEP
+
+    with gzip.open(filepath, "rb") as in_file:
+        is_header = True
+
+        for line in in_file:
+            if is_header:
+                is_header = False
+            else:
+                o = json.loads(line.decode(ENCODE_UTF8))
+                cookie_id, creation_datetime = o["cookie_id"], o["creation_datetime"]
+
+                if creation_datetime.find(".") > -1:
+                    creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S.%f")
+                else:
+                    creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S")
+
+                pool.setdefault(cookie_id, []).append(creation_datetime)
+
+    return pool
+
+if __name__ == "__main__":
+    import glob
+
+    df = {}
+    filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
+    for filepath in sorted(glob.glob(filepath_raw_cookie)):
+        if len(os.path.basename(filepath)) > 22:
+            df = create_cookie_history(filepath, df)
+            print("current filepath is {}".format(filepath))
+
+    save_cookie_history(df)
 
     '''
-    category = load_category("../data/setting/category.tsv")
-    for url, c in category.items():
-        for f, value in c.items():
-            print(url, f, value)
+    results = load_cookie_id()
+    for cookie_id, creation_datetime in results.items():
+        print((cookie_id, creation_datetime))
     '''

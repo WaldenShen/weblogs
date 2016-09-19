@@ -12,7 +12,7 @@ import jaydebeapi as jdbc
 from luigi import date_interval as d
 
 from rdb import TeradataTable
-from utils import load_category, norm_url, get_date_type
+from utils import load_category, norm_url, get_date_type, is_app_log
 from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
@@ -61,10 +61,11 @@ class ClickstreamFirstRaw(luigi.Task):
             try:
                 session_number, seq, url, creation_datetime, duration, active_duration, loading_duration = row
                 url = url.lower()
+                n_url = norm_url(url)
 
                 function, logic, intention = None, None, None
-                if url in category:
-                    function, logic, intention = category[url]["function"], category[url]["logic"], category[url]["intention"]
+                if n_url in category:
+                    function, logic, intention = category[n_url]["function"], category[n_url]["logic"], category[n_url]["intention"]
 
                 results.setdefault(session_number, [])
                 results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, "ip"])
@@ -155,8 +156,10 @@ class RawPath(luigi.Task):
 
     def run(self):
         with self.output().open("wb") as out_file:
-            out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
-            #out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
+            try:
+                out_file.write(bytes(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]), ENCODE_UTF8))
+            except:
+                out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
 
             pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
             for input in self.input():
@@ -178,13 +181,18 @@ class RawPath(luigi.Task):
 
                         info = row.decode(ENCODE_UTF8).strip().split(SEP)
                         session_number, _, _, sequence, url, creation_datetime, _, _, _, _, _, _, _ = info
-                        if url.find("https") == -1:
+                        if is_app_log(url):
                             continue
 
                         url = norm_url(url)
 
                         if pre_session_number is not None and pre_session_number != session_number:
-                            out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+                            try:
+                                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+                            except:
+                                out_file.write("{}{}".format(SEP.join([pre_session_number, "cookie_id", pre_creation_datetime]), SEP))
+                                out_file.write(NEXT.join(page.encode(ENCODE_UTF8) for page in pages))
+                                out_file.write("\n")
 
                             pages = []
 
@@ -192,7 +200,12 @@ class RawPath(luigi.Task):
 
                         pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
 
-            out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+            try:
+                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+            except:
+                out_file.write("{}{}".format(SEP.join([pre_session_number, "cookie_id", pre_creation_datetime]), SEP))
+                out_file.write(NEXT.join(page.encode(ENCODE_UTF8) for page in pages))
+                out_file.write("\n")
 
     def output(self):
         global BASEPATH_RAW
@@ -201,6 +214,7 @@ class RawPath(luigi.Task):
 
 class RawPageError(luigi.Task):
     task_namespace = "clickstream"
+    priority = 10
 
     ofile = luigi.Parameter()
     interval = luigi.DateIntervalParameter()
@@ -233,8 +247,10 @@ class RawPageError(luigi.Task):
                     count += 1
 
         with self.output().open("wb") as out_file:
-            out_file.write(bytes("{}\n".format(count), ENCODE_UTF8))
-            #out_file.write("{}\n".format(count))
+            try:
+                out_file.write(bytes("{}\n".format(count), ENCODE_UTF8))
+            except:
+                out_file.write("{}\n".format(count))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
@@ -247,6 +263,8 @@ class SimpleDynamicTask(RawPath):
     lib = luigi.Parameter()
     mode = luigi.Parameter()
 
+    filter_app = luigi.BoolParameter(default=False)
+
     def run(self):
         pagedict, pagecount = {}, {}
 
@@ -254,9 +272,13 @@ class SimpleDynamicTask(RawPath):
 
         if self.mode.lower() == "dict":
             df = {}
+            is_first = True
+
             for input in self.input():
                 logger.info("Start to process {}".format(input.fn))
-                df = mod.luigi_run(input.fn, df)
+                df = mod.luigi_run(input.fn, self.filter_app, df)
+
+                is_first = False
 
             with self.output().open("wb") as out_file:
                 creation_datetime, date_type = get_date_type(self.output().fn)
