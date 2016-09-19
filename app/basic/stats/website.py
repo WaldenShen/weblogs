@@ -51,9 +51,9 @@ def luigi_run(filepath, filter_app=False, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, url, creation_datetime,\
+                session_id, cookie_id, individual_id, url, creation_datetime,\
                 logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-                duration, active_duration, loading_duration, _ = parse_raw_page(line)
+                duration, active_duration, loading_duration = parse_raw_page(line)
 
                 if filter_app and is_app_log(url):
                     continue
@@ -73,7 +73,12 @@ def luigi_run(filepath, filter_app=False, results={}):
                               "count_logic1": {},
                               "count_logic2": {},
                               "count_function": {},
-                              "count_intention": {}}
+                              "count_intention": {},
+                              "count_logic": {},
+                              "count_logic1_function": {},
+                              "count_logic2_function": {},
+                              "count_logic1_intention": {},
+                              "count_logic2_intention": {}}
 
                     results.setdefault(domain, init_r)
 
@@ -91,7 +96,7 @@ def luigi_run(filepath, filter_app=False, results={}):
                     if session_id != session:
                         results[domain]["count_session"] += 1
 
-                    for key, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function, intention, logic, logic1_function, logic2_funciton, logic1_intention, logic2_intention]):
+                    for key, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
                         results[domain]["count_{}".format(key)].setdefault(value, 0)
                         results[domain]["count_{}".format(key)][value] += 1
 
