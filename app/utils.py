@@ -6,7 +6,6 @@ import re
 import pickle
 import gzip
 import json
-import redis
 import datetime
 import pprint
 
