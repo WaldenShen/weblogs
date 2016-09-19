@@ -58,7 +58,7 @@ def is_app_log(log):
 
 def norm_url(url):
     start_idx = url.find("?")
-    return url[:start_idx if start_idx > -1 else len(url)]
+    return url[:start_idx if start_idx > -1 else len(url)].replace("http://", "https://")
 
 def get_date_type(filename):
     date = os.path.basename(filename).split("_")[1].split(".")[0]
@@ -122,7 +122,7 @@ if __name__ == "__main__":
 
     df = {}
     filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
-    for filepath in glob.iglob(filepath_raw_cookie):
+    for filepath in sorted(glob.glob(filepath_raw_cookie)):
         if len(os.path.basename(filepath)) > 22:
             df = create_cookie_history(filepath, df)
             print("current filepath is {}".format(filepath))

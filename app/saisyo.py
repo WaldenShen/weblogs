@@ -61,10 +61,11 @@ class ClickstreamFirstRaw(luigi.Task):
             try:
                 session_number, seq, url, creation_datetime, duration, active_duration, loading_duration = row
                 url = url.lower()
+                n_url = norm_url(url)
 
                 function, logic, intention = None, None, None
-                if url in category:
-                    function, logic, intention = category[url]["function"], category[url]["logic"], category[url]["intention"]
+                if n_url in category:
+                    function, logic, intention = category[n_url]["function"], category[n_url]["logic"], category[n_url]["intention"]
 
                 results.setdefault(session_number, [])
                 results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, "ip"])
