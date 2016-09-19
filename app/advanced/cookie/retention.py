@@ -8,7 +8,7 @@ import json
 import datetime
 
 from utils import SEP, ENCODE_UTF8
-from utils import load_cookie_id
+from utils import load_cookie_history
 
 '''
 INPUT (schema JSON format)
@@ -44,7 +44,7 @@ return_56
 no_return
 '''
 
-pool = load_cookie_id()
+pool = load_cookie_history()
 
 def luigi_run(filepath, results={}):
     global SEP, ENCODE_UTF8

@@ -58,8 +58,8 @@ class RawTask(luigi.Task):
             ofile_stats_website = os.path.join(BASEPATH_STATS, "website_{}.tsv.gz".format(self.interval))
             yield SimpleDynamicTask(interval=self.interval, filter_app=True, ofile=ofile_stats_website, **self.stats_website)
 
-            #ofile_page_error = os.path.join(BASEPATH_RAW, "pageerror_{}.tsv.gz".format(self.interval))
-            #yield RawPageError(interval=self.interval, ofile=ofile_page_error)
+            ofile_page_error = os.path.join(BASEPATH_RAW, "pageerror_{}.tsv.gz".format(self.interval))
+            yield RawPageError(interval=self.interval, ofile=ofile_page_error)
         elif self.mode == "range":
             for date in self.interval:
                 interval = d.Date.parse(str(date))
@@ -82,8 +82,8 @@ class RawTask(luigi.Task):
                 ofile_stats_website = os.path.join(BASEPATH_STATS, "website_{}.tsv.gz".format(str(date)))
                 yield SimpleDynamicTask(interval=interval, filter_app=True, ofile=ofile_stats_website, **self.stats_website)
 
-                #ofile_page_error = os.path.join(BASEPATH_RAW, "pageerror_{}.tsv.gz".format(str(date)))
-                #yield RawPageError(interval=interval, ofile=ofile_page_error)
+                ofile_page_error = os.path.join(BASEPATH_RAW, "pageerror_{}.tsv.gz".format(str(date)))
+                yield RawPageError(interval=interval, ofile=ofile_page_error)
 
                 for hour in range(0, 24):
                     ofile_stats_page = os.path.join(BASEPATH_STATS, "page_{}{:02d}.tsv.gz".format(str(date), hour))
@@ -127,8 +127,8 @@ class AdvancedTask(luigi.Task):
                     ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, str(date)))
                     yield PageCorrTask(ofile=ofile_page_corr, interval=interval, node_type=node_type, **self.adv_corr)
 
-                #ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(str(date)))
-                #yield CommonPathTask(interval=interval, ofile=ofile_common_path)
+                ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(str(date)))
+                yield CommonPathTask(interval=interval, ofile=ofile_common_path)
 
                 # 4 weeks data
                 ifiles = []
