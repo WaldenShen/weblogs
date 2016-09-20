@@ -127,7 +127,7 @@ class ClickstreamFirstRaw(luigi.Task):
 class RawPath(luigi.Task):
     task_namespace = "clickstream"
 
-    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
+    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,duration,active_duration,loading_time,ip")
 
     interval = luigi.DateIntervalParameter()
     hour = luigi.IntParameter(default=-1)
@@ -156,24 +156,25 @@ class RawPath(luigi.Task):
 
             pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
             for input in self.input():
+                is_header = True
                 with input.open("r") as in_file:
                     for row in in_file:
+                        if is_header:
+                            is_header = False
+                            continue
+
                         # 0: session_id
                         # 1: cookie_id
                         # 2: individual_id
                         # 3: session_seq
                         # 4: url
                         # 5: creation_datetime
-                        # 6: function
-                        # 7: logic
-                        # 8: Intention
-                        # 9: duration
-                        # 10: active_duration
-                        # 11: loading_time
-                        # 12: ip
+                        # 6: duration
+                        # 7: active_duration
+                        # 8: loading_time
+                        # 9: ip
 
-                        info = row.decode(ENCODE_UTF8).strip().split(SEP)
-                        session_number, _, _, sequence, url, creation_datetime, _, _, _, _, _, _, _ = info
+                        session_number, _, _, sequence, url, creation_datetime, _, _, _, _ = row.decode(ENCODE_UTF8).strip().split(SEP)
                         if is_app_log(url):
                             continue
 

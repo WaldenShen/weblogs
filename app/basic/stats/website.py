@@ -3,6 +3,7 @@
 
 import gzip
 import json
+import pprint
 
 try:
     from urlparse import urlparse
@@ -121,3 +122,14 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
             out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
         except:
             out_file.write("{}\n".format(json.dumps(d)))
+
+if __name__ == "__main__":
+    import glob
+    filepath = "../data/temp/page_2016-09-01_10.tsv.gz"
+
+    df = {}
+    for filepath in glob.glob("../data/temp/page_2016-09-01_*gz"):
+        df = luigi_run(filepath, True, df)
+
+    luigi_dump("tt.tsv.gz", df, "2016-09-01_10", "hour")
+            

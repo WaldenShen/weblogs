@@ -23,6 +23,7 @@ BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 FILEPATH_COOKIE_ID = os.path.join(BASEPATH, "data", "setting", "cookie_history.pkl")
 FILEPATH_CATEGORY = os.path.join(BASEPATH, "data", "setting", "category.tsv")
 
+CATEGORY_URL = None
 
 def load_category(filepath=FILEPATH_CATEGORY):
     results = {}
@@ -55,8 +56,6 @@ def load_category(filepath=FILEPATH_CATEGORY):
 
     return results
 
-CATEGORY_URL = load_category(FILEPATH_CATEGORY)
-
 def is_app_log(log):
     return log.startswith("app://")
 
@@ -66,6 +65,9 @@ def norm_url(url):
 
 def _categorized_url(url, otype="all"):
     global CATEGORY_URL, FUNC
+
+    if CATEGORY_URL is None:
+        CATEGORY_URL = load_category()
 
     n_url = norm_url(url)
 
@@ -158,9 +160,21 @@ def create_cookie_history(filepath, pool={}):
     return pool
 
 if __name__ == "__main__":
-    import glob
+    '''
+    with gzip.open("../data/temp/page_2016-09-01_10.tsv.gz") as in_file:
+        is_header = True
+        for line in in_file:
+            if is_header:
+                is_header = False
+            else:
+                print(parse_raw_page(line))
+    '''
+
+    print(_categorized_url("https://www.mybank.com.tw/mybank/quicklinks/home"))
 
     '''
+    import glob
+
     df = {}
     filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
     for filepath in sorted(glob.glob(filepath_raw_cookie)):
@@ -171,6 +185,8 @@ if __name__ == "__main__":
     save_cookie_history(df)
     '''
 
+    '''
     results = load_cookie_history()
     for cookie_id, creation_datetime in results.items():
         print((cookie_id, creation_datetime))
+    '''

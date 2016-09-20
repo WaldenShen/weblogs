@@ -166,3 +166,13 @@ class SqlliteTable(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+if __name__ == "__main__":
+    conn = get_connection()
+
+    sql = "SELECT * FROM VP_MCIF.PARTY_DRV_VIP201608;"
+    cursor = conn.cursor()
+    cursor.execute(sql)
+    print([column[0] for column in cursor.description])
+
+    conn.close()

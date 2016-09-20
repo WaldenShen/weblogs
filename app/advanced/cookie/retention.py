@@ -89,6 +89,7 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
                                       "return_14": 0,
                                       "return_21": 0,
                                       "return_28": 0,
+                                      "return_56": 0,
                                       "no_return": 0})
 
         if len(dates) == 1:
@@ -107,8 +108,10 @@ def luigi_dump(out_file, df, creation_datetime, date_type):
                 key = "return_21"
             elif diff <= 28:
                 key = "return_28"
-            else:
+            elif diff <= 56:
                 key = "return_56"
+            else:
+                key = "no_return"
 
             results[date_key][key] += 1
 

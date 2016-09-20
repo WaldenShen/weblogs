@@ -113,27 +113,29 @@ class AdvancedTask(luigi.Task):
         global BASEPATH_RAW, BASEPATH_ADV
 
         if self.mode.lower() == "single":
-            for node_type in ["url", "logic", "function", "intention"]:
+            for node_type in ["url", "logic1", "logic2", "function", "intention"]:
                 ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
                 yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, node_type=node_type, **self.adv_corr)
 
-            ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(self.interval))
-            yield CommonPathTask(interval=self.interval, ofile=ofile_common_path)
+            #ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(self.interval))
+            #yield CommonPathTask(interval=self.interval, ofile=ofile_common_path)
         elif self.mode.lower() == "range":
             for date in self.interval:
                 interval = d.Date.parse(str(date))
 
-                for node_type in ["url", "logic", "function", "intention"]:
+                '''
+                for node_type in ["url", "logic1", "logic2", "function", "intention"]:
                     ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, str(date)))
                     yield PageCorrTask(ofile=ofile_page_corr, interval=interval, node_type=node_type, **self.adv_corr)
+                '''
 
-                ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(str(date)))
-                yield CommonPathTask(interval=interval, ofile=ofile_common_path)
+                #ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(str(date)))
+                #yield CommonPathTask(interval=interval, ofile=ofile_common_path)
 
                 # 4 weeks data
                 ifiles = []
                 now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
-                for i in range(28, -1, -1):
+                for i in range(56, -1, -1):
                     ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format((now - datetime.timedelta(days=i)).strftime("%Y-%m-%d")))
                     if os.path.exists(ifile):
                         ifiles.append(ifile)
@@ -143,10 +145,12 @@ class AdvancedTask(luigi.Task):
                 ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
                 yield RetentionTask(ifile=ifiles, ofile=ofile_retention_path, **self.adv_retention)
 
+                '''
                 for hour in range(0, 24):
-                    for node_type in ["url", "logic", "function", "intention"]:
+                    for node_type in ["url", "logic1", "logic2", "function", "intention"]:
                         ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}{:02d}.tsv.gz".format(node_type, str(date), hour))
                         yield PageCorrTask(ofile=ofile_page_corr, interval=interval, hour=hour, node_type=node_type, **self.adv_corr)
+                '''
         else:
             raise NotImplementedError
 

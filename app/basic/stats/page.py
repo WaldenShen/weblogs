@@ -31,10 +31,10 @@ active_duration     51930.0
 loading_duration    10935.3
 '''
 
-def set_record(results, cookie_id, profile_id, url, logic1, logic2, function, intention, duration, active_duration, loading_duration):
+def set_record(results, cookie_id, profile_id, url, logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention, duration, active_duration, loading_duration):
     global OTHER
 
-    for key_type, key in zip(["url", "logic1", "logic2", "function", "intention"], [url, logic1, logic2, function, intention]):
+    for key_type, key in zip(["url", "logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [url, logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
         # implement your logic
         init_r = {"url": None,
                   "url_type": None,
@@ -73,7 +73,7 @@ def luigi_run(filepath, filter_app=False, results={}):
                 if filter_app and is_app_log(url):
                     continue
 
-                set_record(results, cookie_id, individual_id, norm_url(url), logic1, logic2, function, intention, duration, active_duration, loading_duration)
+                set_record(results, cookie_id, individual_id, norm_url(url), logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention, duration, active_duration, loading_duration)
 
     return results
 
