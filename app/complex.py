@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import os
 import json
 import luigi
 import logging
@@ -10,15 +11,23 @@ from utils import get_date_type, SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
 
+BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
+BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
+
 
 class CommonPathTask(luigi.Task):
     task_namespace = "clickstream"
 
     ofile = luigi.Parameter()
+
+    ntype = luigi.Parameter()
     interval = luigi.DateIntervalParameter()
 
     def requires(self):
-        yield RawPath(interval=self.interval)
+        global BASEPATH_RAW
+
+        ofile = "{}/{}path_{}.tsv.gz".format(BASEPATH_RAW, self.ntype, self.interval)
+        yield RawPath(ntype=self.ntype.replace("_", ""), interval=self.interval, ofile=ofile)
 
     def run(self):
         common_path = suffix_tree.CommonPath()
@@ -36,8 +45,12 @@ class CommonPathTask(luigi.Task):
 
         with self.output().open("wb") as out_file:
             for session_ids, paths in common_path.print_tree():
-                out_file.write(bytes("{}\n".format(SEP.join(session_ids)), ENCODE_UTF8))
-                out_file.write(bytes("{}\n".format(SEP.join(paths)), ENCODE_UTF8))
+                try:
+                    out_file.write(bytes("{}\n".format(SEP.join(session_ids)), ENCODE_UTF8))
+                    out_file.write(bytes("{}\n".format(SEP.join(paths)), ENCODE_UTF8))
+                except:
+                    out_file.write("{}\n".format(SEP.join(session_ids)))
+                    out_file.write("{}\n".format(SEP.join(paths)))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
@@ -46,8 +59,6 @@ class PageCorrTask(RawPath):
     task_namespace = "clickstream"
 
     ofile = luigi.Parameter()
-
-    node_type = luigi.Parameter()
 
     lib = luigi.Parameter()
     length = luigi.IntParameter(default=2)
@@ -60,7 +71,7 @@ class PageCorrTask(RawPath):
         df = None
         for input in self.input():
             logger.info("Start to process {}({}, {})".format(input.fn, len(pagedict), len(pagecount)))
-            df = mod.luigi_run(input.fn, self.node_type, self.length, pagedict, pagecount)
+            df = mod.luigi_run(input.fn, self.ntype, self.length, pagedict, pagecount)
 
         with self.output().open("wb") as out_file:
             creation_datetime, date_type = get_date_type(self.output().fn)

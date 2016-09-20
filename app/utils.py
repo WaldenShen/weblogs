@@ -42,7 +42,8 @@ def load_category(filepath=FILEPATH_CATEGORY):
     ...
     ...
     '''
-    with open(filepath, "r", encoding=ENCODE_UTF8) as in_file:
+    #with open(filepath, "r", encoding=ENCODE_UTF8) as in_file:
+    with open(filepath, "r") as in_file:
         is_header = True
 
         for line in in_file:

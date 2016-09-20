@@ -12,7 +12,7 @@ import jaydebeapi as jdbc
 from luigi import date_interval as d
 
 from rdb import TeradataTable
-from utils import norm_url, get_date_type, is_app_log
+from utils import norm_url, get_date_type, is_app_log, _categorized_url
 from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
@@ -128,9 +128,12 @@ class RawPath(luigi.Task):
     task_namespace = "clickstream"
 
     columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,duration,active_duration,loading_time,ip")
+    ofile = luigi.Parameter()
 
     interval = luigi.DateIntervalParameter()
     hour = luigi.IntParameter(default=-1)
+
+    ntype = luigi.Parameter()
 
     def requires(self):
         global BASEPATH_TEMP
@@ -154,7 +157,7 @@ class RawPath(luigi.Task):
             except:
                 out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
 
-            pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
+            pre_session_number, pre_cookie_id, pre_creation_datetime, pre_sequence, pages = None, None, None, None, []
             for input in self.input():
                 is_header = True
                 with input.open("r") as in_file:
@@ -174,15 +177,40 @@ class RawPath(luigi.Task):
                         # 8: loading_time
                         # 9: ip
 
-                        session_number, _, _, sequence, url, creation_datetime, _, _, _, _ = row.decode(ENCODE_UTF8).strip().split(SEP)
+                        session_number, cookie_id, _, sequence, url, creation_datetime, _, _, _, _ = row.decode(ENCODE_UTF8).strip().split(SEP)
                         if is_app_log(url):
                             continue
 
                         url = norm_url(url)
+                        logic1, logic2, function, intention = _categorized_url(url)
+
+                        page = url
+                        if self.ntype == "logic1":
+                            page = logic1
+                        elif self.ntype == "logic2":
+                            page = logic2
+                        elif self.ntype == "function":
+                            page = function
+                        elif self.ntype == "intention":
+                            page = intention
+                        elif self.ntype == "logic":
+                            page = logic1 + "_" + logic2
+                        elif self.ntype == "logic1function":
+                            page = logic1 + "_" + function
+                        elif self.ntype == "logic2function":
+                            page = logic2 + "_" + function
+                        elif self.ntype == "logic1intention":
+                            page = logic1 + "_" + intention
+                        elif self.ntype == "logic2intention":
+                            page = logic2 + "_" + intention
+                        else:
+                            raise NotImplementedError
+
+                        logger.info((self.ntype, url, page))
 
                         if pre_session_number is not None and pre_session_number != session_number:
                             try:
-                                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+                                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, pre_cookie_id, pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
                             except:
                                 out_file.write("{}{}".format(SEP.join([pre_session_number, "cookie_id", pre_creation_datetime]), SEP))
                                 out_file.write(NEXT.join(page.encode(ENCODE_UTF8) for page in pages))
@@ -190,21 +218,19 @@ class RawPath(luigi.Task):
 
                             pages = []
 
-                        pages.append(url)
+                        pages.append(page)
 
-                        pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
+                        pre_session_number, pre_cookie_id, pre_creation_datetime, pre_sequence = session_number, cookie_id, creation_datetime, sequence
 
             try:
-                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, pre_cookie_id, pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
             except:
-                out_file.write("{}{}".format(SEP.join([pre_session_number, "cookie_id", pre_creation_datetime]), SEP))
+                out_file.write("{}{}".format(SEP.join([pre_session_number, pre_cookie_id, pre_creation_datetime]), SEP))
                 out_file.write(NEXT.join(page.encode(ENCODE_UTF8) for page in pages))
                 out_file.write("\n")
 
     def output(self):
-        global BASEPATH_RAW
-
-        return luigi.LocalTarget("{}/path_{}.tsv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
 class RawPageError(luigi.Task):
     task_namespace = "clickstream"
