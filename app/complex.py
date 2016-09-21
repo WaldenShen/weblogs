@@ -43,8 +43,9 @@ class CommonPathTask(luigi.Task):
                         session_id, _, _, path = line.decode(ENCODE_UTF8).strip().split(SEP)
                         common_path.plant_tree(session_id, path.split(NEXT))
 
+        creation_datetime, date_type = get_date_type(self.output().fn)
         with self.output().open("wb") as out_file:
-            for j in common_path.print_tree():
+            for j in common_path.print_tree(creation_datetime, date_type):
                 try:
                     out_file.write(bytes("{}\n".format(j), ENCODE_UTF8))
                 except:
