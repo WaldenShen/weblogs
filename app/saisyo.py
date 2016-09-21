@@ -206,7 +206,7 @@ class RawPath(luigi.Task):
                         else:
                             raise NotImplementedError
 
-                        logger.info((self.ntype, url, page))
+                        #logger.info((self.ntype, url, page))
 
                         if pre_session_number is not None and pre_session_number != session_number:
                             try:

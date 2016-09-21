@@ -76,7 +76,7 @@ class PageCorrTask(RawPath):
         with self.output().open("wb") as out_file:
             creation_datetime, date_type = get_date_type(self.output().fn)
 
-            for d in mod.get_json(df, self.node_type, date_type, str(self.interval), self.length):
+            for d in mod.get_json(df, self.ntype, date_type, str(self.interval), self.length):
                 try:
                     out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
                 except:
