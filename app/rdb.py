@@ -78,7 +78,7 @@ class TeradataTable(luigi.Task):
     task_namespace = "clickstream"
 
     query = luigi.Parameter()
-    batch_size = luigi.IntParameter(default=20000)
+    batch_size = luigi.IntParameter(default=10000)
 
     ofile = luigi.Parameter()
 
@@ -171,7 +171,7 @@ class SqlliteTable(luigi.Task):
 if __name__ == "__main__":
     conn = get_connection()
 
-    sql = "SELECT * FROM VP_MCIF.PARTY_VA_BUCC_PROD_STAT201608;"
+    sql = "SELECT * FROM DP_MCIF_REF.RD_ABT_PROD_CODE;"
     cursor = conn.cursor()
     cursor.execute(sql)
     print([column[0] for column in cursor.description])
