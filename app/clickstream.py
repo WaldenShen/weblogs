@@ -189,6 +189,7 @@ class RDBTask(luigi.Task):
                     table = "stats_{}".format(stats_type)
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
+            '''
             table = "adv_pagecorr"
             for node_type in ["url", "logic", "function", "intention"]:
                 for date in self.interval:
@@ -202,6 +203,7 @@ class RDBTask(luigi.Task):
                     ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type, str(date)))
 
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+            '''
 
             table = "adv_retention"
             for date in self.interval:
