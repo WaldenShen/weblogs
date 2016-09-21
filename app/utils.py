@@ -3,11 +3,17 @@
 
 import os
 import re
+import glob
 import pickle
 import gzip
 import json
 import datetime
 import pprint
+
+try:
+    from urlparse import urlparse
+except ImportError:
+    from urllib.parse import urlparse
 
 SEP = "\t"
 OTHER = "其他"
@@ -16,12 +22,36 @@ ENCODE_UTF8 = "UTF-8"
 
 COOKIE_HISTORY = "cookie_history"
 
-FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else y + "_" + OTHER
-FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
-
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 FILEPATH_COOKIE_ID = os.path.join(BASEPATH, "data", "setting", "cookie_history.pkl")
 FILEPATH_CATEGORY = os.path.join(BASEPATH, "data", "setting", "category.tsv")
+
+'''
+Error
+KOKOWEB
+MMB
+MYBANK
+my bank
+myb2b
+mybank
+官網
+平台
+網站索引
+'''
+DOMAIN_MAP = {"com.cathaybk.koko.ios.app": "KOKO",
+              "www.cathayholdings.com": "官網",
+              "www.myb2b.com.tw": "企業網銀",
+              "com.cathaybk.mmb.ios.app": "行動銀行",
+              "com.cathaybk.mymobibank.android.app": "行動銀行",
+              "www.cathaybk.com.tw": "官網",
+              "www.globalmyb2b.com": "企業網銀",
+              "www.mybank.com.tw": "網路營行",
+              "com.cathaybk.koko.android.app": "KOKO",
+              "www.kokobank.com": "KOKO",
+              "cathaybk.com.tw": "官網"}
+
+FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else y + "_" + OTHER
+FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 CATEGORY_URL = None
 
@@ -42,18 +72,28 @@ def load_category(filepath=FILEPATH_CATEGORY):
     ...
     ...
     '''
-    #with open(filepath, "r", encoding=ENCODE_UTF8) as in_file:
-    with open(filepath, "r") as in_file:
-        is_header = True
+    in_file = None
 
-        for line in in_file:
-            if is_header:
-                is_header = False
-            else:
-                info = re.split(",", line.strip().lower())
+    try:
+        in_file = open(filepath, "r", encoding=ENCODE_UTF8)
+    except:
+        in_file = open(filepath, "r")
 
-                website, product_1, product_2, function, intention, url = info
-                results.setdefault(url, {"logic1": product_1, "logic2": product_2, "function": function, "intention": intention})
+    is_header = True
+    for line in in_file:
+        if is_header:
+            is_header = False
+        else:
+            info = re.split(",", line.strip().lower())
+
+            website, product_1, product_2, function, intention, url = info
+            if product_1:
+                results.setdefault(url, {"logic1": product_1.lower().replace(" ", ""),
+                                         "logic2": product_2.lower().replace(" ", ""),
+                                         "function": function.lower().replace(" ", ""),
+                                         "intention": intention})
+
+    in_file.close()
 
     return results
 
@@ -65,7 +105,7 @@ def norm_url(url):
     return url[:start_idx if start_idx > -1 else len(url)].replace("http://", "https://")
 
 def _categorized_url(url, otype="all"):
-    global CATEGORY_URL, FUNC
+    global CATEGORY_URL, DOMAIN_MAP, FUNC, OTHER
 
     if CATEGORY_URL is None:
         CATEGORY_URL = load_category()
@@ -75,19 +115,25 @@ def _categorized_url(url, otype="all"):
     logic1, logic2, function, intention = None, None, None, None
     if n_url in CATEGORY_URL:
         logic1, logic2, function, intention = CATEGORY_URL[n_url]["logic1"], CATEGORY_URL[n_url]["logic2"], CATEGORY_URL[n_url]["function"], CATEGORY_URL[n_url]["intention"]
+    else:
+        domain = DOMAIN_MAP.get(urlparse(url).netloc, OTHER)
+        logic1, logic2, function, intention = domain, domain, domain, domain
 
+    ret = None
     if otype == "all":
-        return FUNC(logic1, "logic1"), FUNC(logic2, "logic2"), FUNC(function, "function"), FUNC(intention, "intention")
+        ret = FUNC(logic1, "logic1"), FUNC(logic2, "logic2"), FUNC(function, "function"), FUNC(intention, "intention")
     elif otype == "logic1":
-        return FUNC(logic1, "logic1")
+        ret = FUNC(logic1, "logic1")
     elif otype == "logic2":
-        return FUNC(logic2, "logic2")
+        ret = FUNC(logic2, "logic2")
     elif otype == "function":
-        return FUNC(function, "function")
+        ret = FUNC(function, "function")
     elif otype == "intention":
-        return FUNC(intention, "intention")
+        ret = FUNC(intention, "intention")
     elif otype == "logic":
-        return FUNC(logic1, "logic1") + "_" + FUNC(logic2, "logic2")
+        ret = FUNC(logic1, "logic1") + "_" + FUNC(logic2, "logic2")
+
+    return ret
 
 def _rich_url(logic1, logic2, function, intention):
     return "_".join([logic1, logic2]), "_".join([logic1, function]), "_".join([logic2, function]), "_".join([logic1, intention]), "_".join([logic2, intention])
@@ -160,21 +206,53 @@ def create_cookie_history(filepath, pool={}):
 
     return pool
 
+def unknown_urls():
+    filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-01*.tsv.gz")
+
+    urls = {}
+    for filepath in sorted(glob.glob(filepath_raw_page)):
+        if len(os.path.basename(filepath)) > 20:
+            with gzip.open(filepath) as in_file:
+                is_header = True
+                for line in in_file:
+                    if is_header:
+                        is_header = False
+                    else:
+                        info = parse_raw_page(line)
+                        url, logic1 = info[3], info[5]
+
+                        if not is_app_log(url) and OTHER in logic1:
+                            urls.setdefault(norm_url(url), 0)
+                            urls[norm_url(url)] += 1
+
+        print(filepath)
+
+    with open("unknown_url.txt.1", "wb") as out_file:
+        for url, count in urls.items():
+            out_file.write(url.encode(ENCODE_UTF8))
+            out_file.write(SEP)
+            out_file.write(str(count))
+            out_file.write("\n")
+
 if __name__ == "__main__":
+    #unknown_urls()
+
+    #print FUNC("https://www.myb2b.com.tw/ebank/ebgetpwdstatus.asp", "logic")
+
     '''
+    pool = set()
     with gzip.open("../data/temp/page_2016-09-01_10.tsv.gz") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
                 is_header = False
             else:
-                print(parse_raw_page(line))
-    '''
+                url = parse_raw_page(line)[3]
+                pool.add(urlparse(url).netloc)
 
-    print(_categorized_url("https://www.mybank.com.tw/mybank/quicklinks/home"))
-
+    for domain in pool:
+        print domain
     '''
-    import glob
 
     df = {}
     filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
@@ -184,10 +262,19 @@ if __name__ == "__main__":
             print("current filepath is {}".format(filepath))
 
     save_cookie_history(df)
-    '''
 
     '''
-    results = load_cookie_history()
-    for cookie_id, creation_datetime in results.items():
-        print((cookie_id, creation_datetime))
+    pool = set()
+    results = load_cookie_history("../data/setting/cookie_history.pkl.1")
+    #for cookie_id, creation_datetime in results.items():
+        #print((cookie_id, creation_datetime))
+        #pool.add(cookie_id)
+    pool = set(results.keys())
+
+    results = set(load_cookie_history().keys())
+    for cookie_id in pool - results:
+        print cookie_id
+
+    print len(pool)
+    print len(results)
     '''

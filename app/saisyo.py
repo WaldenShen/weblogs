@@ -133,7 +133,7 @@ class RawPath(luigi.Task):
     interval = luigi.DateIntervalParameter()
     hour = luigi.IntParameter(default=-1)
 
-    ntype = luigi.Parameter()
+    ntype = luigi.Parameter(default="url")
 
     def requires(self):
         global BASEPATH_TEMP
