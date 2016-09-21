@@ -78,10 +78,9 @@ class TeradataTable(luigi.Task):
     task_namespace = "clickstream"
 
     query = luigi.Parameter()
-    batch_size = luigi.IntParameter(default=10000)
+    batch_size = luigi.IntParameter(default=20000)
 
     ofile = luigi.Parameter()
-    columns = luigi.Parameter()
 
     def run(self):
         connection = get_connection()
@@ -96,8 +95,12 @@ class TeradataTable(luigi.Task):
         except jdbc.DatabaseError:
             count_error += 1
 
+        columns = [column[0] for column in cursor.description]
         with self.output().open('wb') as out_file:
-            out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
+            try:
+                out_file.write(bytes("{}\n".format(SEP.join(columns)), ENCODE_UTF8))
+            except:
+                out_file.write("{}\n".format(SEP.join(columns)))
 
             try:
                 while True:
@@ -107,10 +110,8 @@ class TeradataTable(luigi.Task):
                         for row in results:
                            try:
                                 out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
-                           except UnicodeEncodeError as e:
-                                logger.warn(e)
-
-                                count_error += 1
+                           except:
+                                out_file.write("{}\n".format(SEP.join([str(r) for r in row])))
                     else:
                         break
             except jdbc.Error as e:
@@ -170,7 +171,7 @@ class SqlliteTable(luigi.Task):
 if __name__ == "__main__":
     conn = get_connection()
 
-    sql = "SELECT * FROM VP_MCIF.PARTY_DRV_VIP201608;"
+    sql = "SELECT * FROM VP_MCIF.PARTY_VA_BUCC_PROD_STAT201608;"
     cursor = conn.cursor()
     cursor.execute(sql)
     print([column[0] for column in cursor.description])

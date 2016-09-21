@@ -57,6 +57,7 @@ class CommonPathTask(luigi.Task):
 
 class PageCorrTask(RawPath):
     task_namespace = "clickstream"
+    priority = 20
 
     ofile = luigi.Parameter()
 

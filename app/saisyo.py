@@ -242,7 +242,6 @@ class RawPageError(luigi.Task):
     def requires(self):
         global BASEPATH_TEMP
 
-        columns = "SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription"
         query = "SELECT SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription FROM VP_OP_ADC.pageerror{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59'"
         ofile = "{}/pageerror_{}_{}.tsv.gz"
 
@@ -252,8 +251,7 @@ class RawPageError(luigi.Task):
                 if date.month != datetime.datetime.now().month:
                     table = "{}{:02d}".format(date.year, date.month)
 
-                yield TeradataTable(columns=columns,
-                                    query=query.format(table=table, date=date, hour="{:02d}".format(hour)),
+                yield TeradataTable(query=query.format(table=table, date=date, hour="{:02d}".format(hour)),
                                     ofile=ofile.format(BASEPATH_TEMP, date, "{:02d}".format(hour)))
 
     def run(self):
