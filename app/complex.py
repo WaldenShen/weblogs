@@ -44,13 +44,11 @@ class CommonPathTask(luigi.Task):
                         common_path.plant_tree(session_id, path.split(NEXT))
 
         with self.output().open("wb") as out_file:
-            for session_ids, paths in common_path.print_tree():
+            for j in common_path.print_tree():
                 try:
-                    out_file.write(bytes("{}\n".format(SEP.join(session_ids)), ENCODE_UTF8))
-                    out_file.write(bytes("{}\n".format(SEP.join(paths)), ENCODE_UTF8))
+                    out_file.write(bytes("{}\n".format(j), ENCODE_UTF8))
                 except:
-                    out_file.write("{}\n".format(SEP.join(session_ids)))
-                    out_file.write("{}\n".format(SEP.join(paths)))
+                    out_file.write("{}\n".format(j))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
