@@ -4,6 +4,7 @@
 import os
 import re
 import glob
+import redis
 import pickle
 import gzip
 import json
@@ -54,6 +55,9 @@ FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, u
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 CATEGORY_URL = None
+
+CONN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
+DB_REDIS = redis.Redis(connection_pool=CONN_REDIS)
 
 def load_category(filepath=FILEPATH_CATEGORY):
     results = {}
@@ -173,19 +177,18 @@ def print_json(filepath):
             j = json.loads(line.strip())
             pprint.pprint(j)
 
-def load_cookie_history(filepath=FILEPATH_COOKIE_ID):
-    results = None
-    with open(filepath, "rb") as in_file:
-        results = pickle.load(in_file)
+def load_cookie_history():
+    global DB_REDIS
 
-    return results
+    for cookie_id in DB_REDIS.keys():
+        yield cookie_id, json.loads(DB_REDIS.get(cookie_id))
 
 def save_cookie_history(results, filepath=FILEPATH_COOKIE_ID):
     with open(filepath, "wb") as out_file:
         pickle.dump(results, out_file)
 
 def create_cookie_history(filepath, pool={}):
-    global ENCODE_UTF8, SEP
+    global ENCODE_UTF8, SEP, CONN_REDIS, DB_REDIS
 
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
@@ -202,7 +205,19 @@ def create_cookie_history(filepath, pool={}):
                 else:
                     creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S")
 
-                pool.setdefault(cookie_id, []).append(creation_datetime)
+                #pool.setdefault(cookie_id, []).append(creation_datetime)
+                history = []
+                ret = DB_REDIS.get(cookie_id)
+                if ret:
+                    history = json.loads(ret)
+
+                history.append(creation_datetime.strftime("%Y-%m-%d %H:%M:%S"))
+                DB_REDIS.set(cookie_id, json.dumps(history))
+
+    #DB_REDIS.save()
+
+    print("The size of db is {}".format(len(DB_REDIS.keys())))
+    print("The key of last record is {}".format(cookie_id))
 
     return pool
 

@@ -104,6 +104,7 @@ class AdvancedTask(luigi.Task):
     task_namespace = "clickstream"
 
     mode = luigi.Parameter(default="range")
+    trackday = luigi.IntParameter(default=56)
     interval = luigi.DateIntervalParameter()
 
     adv_corr = luigi.DictParameter(default={"lib": "advanced.page.correlation", "length": 4})
@@ -127,15 +128,8 @@ class AdvancedTask(luigi.Task):
                 # 4 weeks data
                 ifiles = []
                 now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
-                for i in range(56, -1, -1):
-                    ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format((now - datetime.timedelta(days=i)).strftime("%Y-%m-%d")))
-                    if os.path.exists(ifile):
-                        ifiles.append(ifile)
-                    else:
-                        logger.warn("Not found {} for retention calculation".format(ifile))
-
                 ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
-                yield RetentionTask(ifile=ifiles, ofile=ofile_retention_path, **self.adv_retention)
+                yield RetentionTask(date=(now-datetime.timedelta(days=self.trackday)), ofile=ofile_retention_path, **self.adv_retention)
 
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:
@@ -189,6 +183,7 @@ class RDBTask(luigi.Task):
                     table = "stats_{}".format(stats_type)
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
+            '''
             table = "adv_pagecorr"
             for node_type in ["url", "logic", "function", "intention"]:
                 for date in self.interval:
@@ -202,6 +197,7 @@ class RDBTask(luigi.Task):
                     ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type, str(date)))
 
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+            '''
 
             table = "adv_retention"
             for date in self.interval:

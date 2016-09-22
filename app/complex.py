@@ -4,6 +4,7 @@ import os
 import json
 import luigi
 import logging
+from datetime import datetime
 
 from saisyo import RawPath
 from advanced.page import suffix_tree
@@ -90,17 +91,13 @@ class RetentionTask(luigi.Task):
 
     lib = luigi.Parameter()
 
-    ifile = luigi.ListParameter()
+    date = luigi.DateParameter()
     ofile = luigi.Parameter()
 
     def run(self):
         mod = __import__(self.lib, fromlist=[""])
 
-        df = {}
-        for fn in self.ifile:
-            logger.info("Start to process {}".format(fn))
-            df = mod.luigi_run(fn, df)
-
+        df = mod.luigi_run(datetime.combine(self.date, datetime.min.time()), {})
         with self.output().open("wb") as out_file:
             creation_datetime, date_type = get_date_type(self.output().fn)
 
