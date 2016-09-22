@@ -4,7 +4,7 @@
 import gzip
 import json
 
-from utils import parse_raw_page
+from utils import parse_raw_page, is_app_log
 from utils import ENCODE_UTF8
 
 '''
@@ -64,7 +64,7 @@ def set_record(results, session_id, cookie_id, individual_id, creation_datetime,
         results[session_id][key].setdefault(value, 0)
         results[session_id][key][value] += 1
 
-def luigi_run(filepath, is_first, results={}):
+def luigi_run(filepath, filter_app=False, results={}):
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
         for line in in_file:
@@ -74,6 +74,9 @@ def luigi_run(filepath, is_first, results={}):
                 session_id, cookie_id, individual_id, url, creation_datetime,\
                 logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
                 duration, active_duration, loading_duration = parse_raw_page(line)
+
+                if filter_app and is_app_log(url):
+                    continue
 
                 set_record(results, session_id, cookie_id, individual_id, creation_datetime, logic1, logic2, function, intention, duration, active_duration, loading_duration)
 

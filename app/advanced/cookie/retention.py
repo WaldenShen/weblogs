@@ -9,7 +9,7 @@ import redis
 import datetime
 
 from utils import SEP, ENCODE_UTF8
-from utils import load_cookie_history
+from utils import load_history
 
 '''
 INPUT (schema JSON format)
@@ -46,7 +46,7 @@ no_return
 '''
 
 def luigi_run(date_start, results={}):
-    for cookie_id, dates in load_cookie_history():
+    for cookie_id, dates in load_history():
         first_login = datetime.datetime.strptime(dates[0], "%Y-%m-%d %H:%M:%S")
         if first_login >= date_start:
             second_login = None

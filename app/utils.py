@@ -21,6 +21,8 @@ OTHER = "其他"
 NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
+FUNCTION = "function"
+
 COOKIE_HISTORY = "cookie_history"
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
@@ -56,8 +58,11 @@ FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 CATEGORY_URL = None
 
-CONN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
-DB_REDIS = redis.Redis(connection_pool=CONN_REDIS)
+CONN_LOGIN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
+DB_LOGIN_REDIS = redis.Redis(connection_pool=CONN_LOGIN_REDIS)
+
+CONN_BEHAVIOR_REDIS redis.ConnectionPool(host='localhost', port=6380, db=0)
+DB_BEHAVIOR_REDIS = redis.Redis(connection_pool=CONN_BEHAVIOR_REDIS)
 
 def load_category(filepath=FILEPATH_CATEGORY):
     results = {}
@@ -177,49 +182,54 @@ def print_json(filepath):
             j = json.loads(line.strip())
             pprint.pprint(j)
 
-def load_cookie_history():
-    global DB_REDIS
+def load_history():
+    global DB_LOGIN_REDIS
 
-    for cookie_id in DB_REDIS.keys():
-        yield cookie_id, json.loads(DB_REDIS.get(cookie_id))
+    for cookie_id in DB_LOGIN_REDIS.keys():
+        yield cookie_id, json.loads(DB_LOGIN_REDIS.get(cookie_id))
 
-def save_cookie_history(results, filepath=FILEPATH_COOKIE_ID):
-    with open(filepath, "wb") as out_file:
-        pickle.dump(results, out_file)
+def load_cookie_history(cookie_id):
+    global DB_LOGIN_REDIS
 
-def create_cookie_history(filepath, pool={}):
-    global ENCODE_UTF8, SEP, CONN_REDIS, DB_REDIS
+    ret = DB_LOGIN_REDIS.get(cookie_id)
+    if ret:
+        return json.loads(ret)
+    else:
+        return None
+
+def save_cookie_history(cookie_id, creation_datetime):
+    global DB_LOGIN_REDIS
+
+    DB_LOGIN_REDIS.set(cookie_id, json.dumps([creation_datetime.strftime("%Y-%m-%d %H:%M:%S")]))
+
+def create_cookie_history(filepath):
+    global ENCODE_UTF8, CONN_LOGIN_REDIS, DB_LOGIN_REDIS
 
     with gzip.open(filepath, "rb") as in_file:
-        is_header = True
-
         for line in in_file:
-            if is_header:
-                is_header = False
+            o = json.loads(line.decode(ENCODE_UTF8))
+            cookie_id, creation_datetime = o["cookie_id"], o["creation_datetime"]
+
+            if creation_datetime.find(".") > -1:
+                creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S.%f")
             else:
-                o = json.loads(line.decode(ENCODE_UTF8))
-                cookie_id, creation_datetime = o["cookie_id"], o["creation_datetime"]
+                creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S")
 
-                if creation_datetime.find(".") > -1:
-                    creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S.%f")
-                else:
-                    creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S")
+            history = []
+            ret = DB_LOGIN_REDIS.get(cookie_id)
+            if ret:
+                history = json.loads(ret)
+            history.append(creation_datetime.strftime("%Y-%m-%d %H:%M:%S"))
 
-                #pool.setdefault(cookie_id, []).append(creation_datetime)
-                history = []
-                ret = DB_REDIS.get(cookie_id)
-                if ret:
-                    history = json.loads(ret)
+            DB_LOGIN_REDIS.set(cookie_id, json.dumps(history))
 
-                history.append(creation_datetime.strftime("%Y-%m-%d %H:%M:%S"))
-                DB_REDIS.set(cookie_id, json.dumps(history))
-
-    #DB_REDIS.save()
-
-    print("The size of db is {}".format(len(DB_REDIS.keys())))
+    print("The size of db is {}".format(len(DB_LOGIN_REDIS.keys())))
     print("The key of last record is {}".format(cookie_id))
 
-    return pool
+def create_behavior_history(filepath):
+    global ENCODE_UTF8, CONN_BEHAVIOR_REDIS, DB_BEHAVIOR_REDIS
+
+    pass
 
 def unknown_urls():
     filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-01*.tsv.gz")
@@ -269,14 +279,11 @@ if __name__ == "__main__":
         print domain
     '''
 
-    df = {}
     filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
     for filepath in sorted(glob.glob(filepath_raw_cookie)):
         if len(os.path.basename(filepath)) > 22:
-            df = create_cookie_history(filepath, df)
+            create_cookie_history(filepath)
             print("current filepath is {}".format(filepath))
-
-    save_cookie_history(df)
 
     '''
     pool = set()
