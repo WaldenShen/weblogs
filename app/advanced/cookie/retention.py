@@ -5,6 +5,7 @@ import sys
 import gzip
 import math
 import json
+import redis
 import datetime
 
 from utils import SEP, ENCODE_UTF8
@@ -44,30 +45,19 @@ return_56
 no_return
 '''
 
-pool = load_cookie_history()
+def luigi_run(date_start, results={}):
+    for cookie_id, dates in load_cookie_history():
+        first_login = datetime.datetime.strptime(dates[0], "%Y-%m-%d %H:%M:%S")
+        if first_login >= date_start:
+            second_login = None
 
-def luigi_run(filepath, results={}):
-    global SEP, ENCODE_UTF8
-
-    with gzip.open(filepath, "rb") as in_file:
-        is_header = True
-        for line in in_file:
-            if is_header:
-                is_header = False
+            if len(dates) > 1:
+                second_login = datetime.datetime.strptime(dates[1], "%Y-%m-%d %H:%M:%S")
+                results.setdefault(cookie_id, [first_login, second_login])
             else:
-                o = json.loads(line.strip().decode(ENCODE_UTF8))
+                results.setdefault(cookie_id, [first_login])
 
-                cookie_id = o["cookie_id"]
-                creation_datetime = None
-                if o["creation_datetime"].find(".") > -1:
-                    creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S.%f")
-                else:
-                    creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S")
-
-                if creation_datetime <= pool[cookie_id][0]:
-                    results.setdefault(cookie_id, [creation_datetime])
-                elif cookie_id in results and len(results[cookie_id]) < 2:
-                    results[cookie_id].append(creation_datetime)
+    print date_start, len(results)
 
     return results
 
