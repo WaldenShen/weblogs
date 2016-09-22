@@ -161,7 +161,7 @@ class RDBTask(luigi.Task):
                 table = "stats_{}".format(stats_type)
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-            for node_type in ["url", "logic", "function", "intention"]:
+            for node_type in ["logic1", "logic2", "function", "intention"]:
                 ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
                 ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type, self.interval))
 
@@ -204,6 +204,7 @@ class RDBTask(luigi.Task):
                 ifile = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
                 ofile = os.path.join(BASEPATH_DB, "retention_{}.tsv.gz".format(str(date)))
 
-                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+                if os.path.exists(ifile):
+                    yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplementedError
