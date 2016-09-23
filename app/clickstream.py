@@ -107,6 +107,8 @@ class AdvancedTask(luigi.Task):
     trackday = luigi.IntParameter(default=56)
     interval = luigi.DateIntervalParameter()
 
+    is_retention = luigi.BoolParameter()
+
     adv_corr = luigi.DictParameter(default={"lib": "advanced.page.correlation", "length": 4})
     adv_retention = luigi.DictParameter(default={"lib": "advanced.cookie.retention"})
 
@@ -126,7 +128,7 @@ class AdvancedTask(luigi.Task):
                 interval = d.Date.parse(str(date))
 
                 # 4 weeks data
-                if (self.interval.date_b - datetime.timedelta(days=1)).strftime("%Y-%m-%d") == date.strftime("%Y-%m-%d"):
+                if self.is_retention and (self.interval.date_b - datetime.timedelta(days=1)).strftime("%Y-%m-%d") == date.strftime("%Y-%m-%d"):
                     now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
                     ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
                     yield RetentionTask(date=(self.interval.date_b-datetime.timedelta(days=self.trackday)), ofile=ofile_retention_path, **self.adv_retention)
@@ -186,6 +188,13 @@ class RDBTask(luigi.Task):
 
                     table = "stats_{}".format(stats_type)
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+            for date in self.interval:
+                ifile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_DB, "nal_{}.tsv.gz".format(str(date)))
+                table = "stats_nal"
+
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
             '''
             table = "adv_pagecorr"

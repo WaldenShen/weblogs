@@ -21,11 +21,16 @@ OTHER = "其他"
 NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
+COUNT = "count"
 FUNCTION = "function"
+LOGIC1 = "logic1"
+LOGIC2 = "logic2"
+INTENTION = "intention"
 
 COOKIE_HISTORY = "cookie_history"
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
+BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 FILEPATH_COOKIE_ID = os.path.join(BASEPATH, "data", "setting", "cookie_history.pkl")
 FILEPATH_CATEGORY = os.path.join(BASEPATH, "data", "setting", "category.tsv")
 
@@ -61,7 +66,7 @@ CATEGORY_URL = None
 CONN_LOGIN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
 DB_LOGIN_REDIS = redis.Redis(connection_pool=CONN_LOGIN_REDIS)
 
-CONN_BEHAVIOR_REDIS redis.ConnectionPool(host='localhost', port=6380, db=0)
+CONN_BEHAVIOR_REDIS = redis.ConnectionPool(host='localhost', port=6380, db=0)
 DB_BEHAVIOR_REDIS = redis.Redis(connection_pool=CONN_BEHAVIOR_REDIS)
 
 def load_category(filepath=FILEPATH_CATEGORY):
@@ -182,6 +187,14 @@ def print_json(filepath):
             j = json.loads(line.strip())
             pprint.pprint(j)
 
+def parse_datetime(creation_datetime):
+    if creation_datetime.find(".") > -1:
+        creation_datetime = datetime.datetime.strptime(creation_datetime, "%Y-%m-%d %H:%M:%S.%f")
+    else:
+        creation_datetime = datetime.datetime.strptime(creation_datetime, "%Y-%m-%d %H:%M:%S")
+
+    return creation_datetime
+
 def load_history():
     global DB_LOGIN_REDIS
 
@@ -208,12 +221,7 @@ def create_cookie_history(filepath):
     with gzip.open(filepath, "rb") as in_file:
         for line in in_file:
             o = json.loads(line.decode(ENCODE_UTF8))
-            cookie_id, creation_datetime = o["cookie_id"], o["creation_datetime"]
-
-            if creation_datetime.find(".") > -1:
-                creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S.%f")
-            else:
-                creation_datetime = datetime.datetime.strptime(o["creation_datetime"], "%Y-%m-%d %H:%M:%S")
+            cookie_id, creation_datetime = o["cookie_id"], parse_datetime(o["creation_datetime"])
 
             history = []
             ret = DB_LOGIN_REDIS.get(cookie_id)
@@ -226,10 +234,75 @@ def create_cookie_history(filepath):
     print("The size of db is {}".format(len(DB_LOGIN_REDIS.keys())))
     print("The key of last record is {}".format(cookie_id))
 
-def create_behavior_history(filepath):
-    global ENCODE_UTF8, CONN_BEHAVIOR_REDIS, DB_BEHAVIOR_REDIS
+def load_behavior(key):
+    global DB_BEHAVIOR_REDIS
 
-    pass
+    ret = DB_BEHAVIOR_REDIS.get(key)
+    if ret:
+        ret = json.loads(ret)
+
+    return ret
+
+def load_behaviors():
+    global DB_BEHAVIOR_REDIS
+
+    for key in DB_BEHAVIOR_REDIS.keys():
+        yield key, load_behavior(key)
+
+def save_behavior(key, value):
+    global DB_BEHAVIOR_REDIS
+
+    DB_BEHAVIOR_REDIS.set(key, value)
+
+def create_behavior_db(filepath):
+    global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT
+
+    results = {}
+    with gzip.open(filepath, "rb") as in_file:
+        for line in in_file:
+            o = json.loads(line.decode(ENCODE_UTF8))
+            cookie_id, creation_datetime = o["cookie_id"], parse_datetime(o["creation_datetime"])
+            logic1, logic2, function, intention = o[LOGIC1], o[LOGIC2], o[FUNCTION], o[INTENTION]
+
+            history = load_cookie_history(cookie_id)
+            if history:
+                for idx, login_datetime in enumerate([datetime.datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history]):
+                    if creation_datetime == login_datetime:
+                        key = "TIME_{}".format(idx+1)
+
+                        results.setdefault(key, {COUNT: 0, LOGIC1: {}, LOGIC2: {}, FUNCTION: {}, INTENTION: {}})
+                        for subkey, values in zip([LOGIC1, LOGIC2, FUNCTION, INTENTION], [logic1, logic2, function, intention]):
+                            total_count = sum([c for c in logic1.values()])
+                            for name, value in values.items():
+                                name = name.replace(" ", "").replace(u"營行", u"銀行")
+                                results[key][subkey].setdefault(name, 0)
+                                results[key][subkey][name] += float(value) / total_count
+
+                        results[key][COUNT] += 1
+
+                        break
+
+            else:
+                print("Not found {} in 'login' database".format(cookie_id))
+
+    print("finish {} with {}".format(filepath, results.keys()))
+
+    for key, values in results.items():
+        ret = load_behavior(key)
+        if ret:
+            for subkey, category in values.items():
+                if isinstance(category, int):
+                    ret[subkey] += category
+                else:
+                    for name, value in category.items():
+                        ret[subkey].setdefault(name, 0)
+                        ret[subkey][name] += value
+
+            print("update {}".format(key))
+            save_behavior(key, json.dumps(ret))
+        else:
+            print("not found {}".format(key))
+            save_behavior(key, json.dumps(values))
 
 def unknown_urls():
     filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-01*.tsv.gz")
@@ -260,43 +333,16 @@ def unknown_urls():
             out_file.write("\n")
 
 if __name__ == "__main__":
-    #unknown_urls()
-
-    #print FUNC("https://www.myb2b.com.tw/ebank/ebgetpwdstatus.asp", "logic")
-
     '''
-    pool = set()
-    with gzip.open("../data/temp/page_2016-09-01_10.tsv.gz") as in_file:
-        is_header = True
-        for line in in_file:
-            if is_header:
-                is_header = False
-            else:
-                url = parse_raw_page(line)[3]
-                pool.add(urlparse(url).netloc)
-
-    for domain in pool:
-        print domain
-    '''
+    # Create the login_datetime database
 
     filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
     for filepath in sorted(glob.glob(filepath_raw_cookie)):
         if len(os.path.basename(filepath)) > 22:
             create_cookie_history(filepath)
             print("current filepath is {}".format(filepath))
-
     '''
-    pool = set()
-    results = load_cookie_history("../data/setting/cookie_history.pkl.1")
-    #for cookie_id, creation_datetime in results.items():
-        #print((cookie_id, creation_datetime))
-        #pool.add(cookie_id)
-    pool = set(results.keys())
 
-    results = set(load_cookie_history().keys())
-    for cookie_id in pool - results:
-        print cookie_id
-
-    print len(pool)
-    print len(results)
-    '''
+    for filepath in glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz")):
+        print("Start to proceed {}".format(filepath))
+        create_behavior_db(filepath)
