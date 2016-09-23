@@ -27,7 +27,7 @@ LOGIC1 = "logic1"
 LOGIC2 = "logic2"
 INTENTION = "intention"
 
-COOKIE_HISTORY = "cookie_history"
+UNKNOWN = u"未分類"
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
@@ -129,9 +129,9 @@ def _categorized_url(url, otype="all"):
     logic1, logic2, function, intention = None, None, None, None
     if n_url in CATEGORY_URL:
         logic1, logic2, function, intention = CATEGORY_URL[n_url]["logic1"], CATEGORY_URL[n_url]["logic2"], CATEGORY_URL[n_url]["function"], CATEGORY_URL[n_url]["intention"]
-    #else:
-    #    domain = DOMAIN_MAP.get(urlparse(url).netloc, OTHER)
-    #    logic1, logic2, function, intention = domain, domain, domain, domain
+    else:
+        domain = DOMAIN_MAP.get(urlparse(url).netloc, OTHER)
+        logic1, logic2, function, intention = domain, domain, domain, domain
 
     ret = None
     if otype == "all":
@@ -254,8 +254,8 @@ def save_behavior(key, value):
 
     DB_BEHAVIOR_REDIS.set(key, value)
 
-def create_behavior_db(filepath):
-    global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT
+def create_behavior(filepath):
+    global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
 
     results = {}
     with gzip.open(filepath, "rb") as in_file:
@@ -271,12 +271,22 @@ def create_behavior_db(filepath):
                         key = "TIME_{}".format(idx+1)
 
                         results.setdefault(key, {COUNT: 0, LOGIC1: {}, LOGIC2: {}, FUNCTION: {}, INTENTION: {}})
+
                         for subkey, values in zip([LOGIC1, LOGIC2, FUNCTION, INTENTION], [logic1, logic2, function, intention]):
-                            total_count = sum([c for c in logic1.values()])
+                            tc, total_count = 0, 0
                             for name, value in values.items():
-                                name = name.replace(" ", "").replace(u"營行", u"銀行")
-                                results[key][subkey].setdefault(name, 0)
-                                results[key][subkey][name] += float(value) / total_count
+                                if UNKNOWN not in name:
+                                    total_count += value
+
+                                tc += value
+
+                            print key, subkey, name, tc, total_count
+
+                            if total_count > 0:
+                                for name, value in values.items():
+                                    name = name.replace(" ", "").replace(u"投資理財", u"理財投資")
+                                    results[key][subkey].setdefault(name, 0)
+                                    results[key][subkey][name] += float(value) / total_count
 
                         results[key][COUNT] += 1
 
@@ -333,8 +343,6 @@ def unknown_urls():
             out_file.write("\n")
 
 if __name__ == "__main__":
-    unknown_urls()
-
     '''
     # Create the login_datetime database
 
@@ -345,8 +353,8 @@ if __name__ == "__main__":
             print("current filepath is {}".format(filepath))
     '''
 
-    '''
     for filepath in glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz")):
         print("Start to proceed {}".format(filepath))
-        create_behavior_db(filepath)
-    '''
+        create_behavior(filepath)
+
+        break
