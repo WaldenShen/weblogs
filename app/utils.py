@@ -58,7 +58,7 @@ DOMAIN_MAP = {"com.cathaybk.koko.ios.app": "KOKO未分類",
               "www.kokobank.com": "KOKO未分類",
               "cathaybk.com.tw": "官網未分類"}
 
-FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else DOMAIN_MAP.get(urlparse(x).netloc, OTHER)
+FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else y + "_" + OTHER
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 CATEGORY_URL = None
@@ -120,34 +120,38 @@ def norm_url(url):
 
 def _categorized_url(url, otype="all"):
     global CATEGORY_URL, DOMAIN_MAP, FUNC, OTHER
+    global LOGIC1, LOGIC2, FUNCTION, INTENTION
 
     if CATEGORY_URL is None:
         CATEGORY_URL = load_category()
 
-    n_url = norm_url(url)
+    n_url = norm_url(url.lower())
 
     logic1, logic2, function, intention = None, None, None, None
     if n_url in CATEGORY_URL:
-        logic1, logic2, function, intention = CATEGORY_URL[n_url]["logic1"], CATEGORY_URL[n_url]["logic2"], CATEGORY_URL[n_url]["function"], CATEGORY_URL[n_url]["intention"]
+        logic1, logic2, function, intention = CATEGORY_URL[n_url][LOGIC1], CATEGORY_URL[n_url][LOGIC2], CATEGORY_URL[n_url][FUNCTION], CATEGORY_URL[n_url][INTENTION]
+    else:
+        domain = DOMAIN_MAP.get(urlparse(n_url).netloc, OTHER)
+        logic1, logic2, function, intention = domain, domain, domain, domain
 
     ret = None
     if otype == "all":
-        ret = FUNC(logic1, "logic1"), FUNC(logic2, "logic2"), FUNC(function, "function"), FUNC(intention, "intention")
-    elif otype == "logic1":
-        ret = FUNC(logic1, "logic1")
-    elif otype == "logic2":
-        ret = FUNC(logic2, "logic2")
-    elif otype == "function":
-        ret = FUNC(function, "function")
-    elif otype == "intention":
-        ret = FUNC(intention, "intention")
+        ret = FUNC(logic1, LOGIC1), FUNC(logic2, LOGIC2), FUNC(function, FUNCTION), FUNC(intention, INTENTION)
+    elif otype == LOGIC1:
+        ret = FUNC(logic1, LOGIC1)
+    elif otype == LOGIC2:
+        ret = FUNC(logic2, LOGIC2)
+    elif otype == FUNCTION:
+        ret = FUNC(function, FUNCTION)
+    elif otype == INTENTION:
+        ret = FUNC(intention, INTENTION)
     elif otype == "logic":
-        ret = FUNC(logic1, "logic1") + "_" + FUNC(logic2, "logic2")
+        ret = FUNC(logic1, LOGIC1) + "_" + FUNC(logic2, LOGIC2)
 
     return ret
 
 def _rich_url(logic1, logic2, function, intention):
-    return "_".join([logic1, logic2]), "_".join([logic1, function]), "_".join([logic2, function]), "_".join([logic1, intention]), "_".join([logic2, intention])
+    return logic1 + "_" + logic2 , logic1 + "_" + function, logic2 + "_" + function, logic1 + "_" + intention, logic2 + "_" + intention
 
 def parse_raw_page(line):
     global ENCODE_UTF8, SEP, FUNC_NONE
@@ -272,12 +276,10 @@ def create_behavior(filepath):
                         for subkey, values in zip([LOGIC1, LOGIC2, FUNCTION, INTENTION], [logic1, logic2, function, intention]):
                             tc, total_count = 0, 0
                             for name, value in values.items():
-                                if UNKNOWN not in name:
+                                if UNKNOWN not in name and name.find(u"其他") == -1:
                                     total_count += value
 
                                 tc += value
-
-                            print key, subkey, name, tc, total_count
 
                             if total_count > 0:
                                 for name, value in values.items():
