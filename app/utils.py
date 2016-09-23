@@ -58,7 +58,7 @@ DOMAIN_MAP = {"com.cathaybk.koko.ios.app": "KOKO未分類",
               "www.kokobank.com": "KOKO未分類",
               "cathaybk.com.tw": "官網未分類"}
 
-FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else y + "_" + OTHER
+FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else DOMAIN_MAP.get(urlparse(x).netloc, OTHER)
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 CATEGORY_URL = None
@@ -129,9 +129,6 @@ def _categorized_url(url, otype="all"):
     logic1, logic2, function, intention = None, None, None, None
     if n_url in CATEGORY_URL:
         logic1, logic2, function, intention = CATEGORY_URL[n_url]["logic1"], CATEGORY_URL[n_url]["logic2"], CATEGORY_URL[n_url]["function"], CATEGORY_URL[n_url]["intention"]
-    else:
-        domain = DOMAIN_MAP.get(urlparse(url).netloc, OTHER)
-        logic1, logic2, function, intention = domain, domain, domain, domain
 
     ret = None
     if otype == "all":

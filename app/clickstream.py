@@ -68,7 +68,7 @@ class RawTask(luigi.Task):
                 yield SimpleDynamicTask(interval=interval, filter_app=True, ofile=ofile_raw_session, **self.raw_session)
 
                 ofile_raw_cookie = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
-                yield SimpleDynamicTask(interval=interval, filter_app=True, ofile=ofile_raw_cookie, **self.raw_cookie)
+                yield SimpleDynamicTask(prior=50, interval=interval, filter_app=True, ofile=ofile_raw_cookie, **self.raw_cookie)
 
                 ofile_stats_page = os.path.join(BASEPATH_STATS, "page_{}.tsv.gz".format(str(date)))
                 yield SimpleDynamicTask(interval=interval, filter_app=True, ofile=ofile_stats_page, **self.stats_page)
