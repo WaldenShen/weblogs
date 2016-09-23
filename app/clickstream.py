@@ -8,7 +8,7 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
@@ -107,6 +107,8 @@ class AdvancedTask(luigi.Task):
     trackday = luigi.IntParameter(default=56)
     interval = luigi.DateIntervalParameter()
 
+    is_retention = luigi.BoolParameter()
+
     adv_corr = luigi.DictParameter(default={"lib": "advanced.page.correlation", "length": 4})
     adv_retention = luigi.DictParameter(default={"lib": "advanced.cookie.retention"})
 
@@ -126,10 +128,14 @@ class AdvancedTask(luigi.Task):
                 interval = d.Date.parse(str(date))
 
                 # 4 weeks data
-                ifiles = []
-                now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
-                ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
-                yield RetentionTask(date=(now-datetime.timedelta(days=self.trackday)), ofile=ofile_retention_path, **self.adv_retention)
+                if self.is_retention and (self.interval.date_b - datetime.timedelta(days=1)).strftime("%Y-%m-%d") == date.strftime("%Y-%m-%d"):
+                    now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
+                    ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
+                    yield RetentionTask(date=(self.interval.date_b-datetime.timedelta(days=self.trackday)), ofile=ofile_retention_path, **self.adv_retention)
+
+                ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
+                yield NALTask(ifile=ifile, ofile=ofile)
 
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:
@@ -161,7 +167,7 @@ class RDBTask(luigi.Task):
                 table = "stats_{}".format(stats_type)
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-            for node_type in ["url", "logic", "function", "intention"]:
+            for node_type in ["logic1", "logic2", "function", "intention"]:
                 ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
                 ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type, self.interval))
 
@@ -182,6 +188,13 @@ class RDBTask(luigi.Task):
 
                     table = "stats_{}".format(stats_type)
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+            for date in self.interval:
+                ifile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_DB, "nal_{}.tsv.gz".format(str(date)))
+                table = "stats_nal"
+
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
             '''
             table = "adv_pagecorr"
@@ -204,6 +217,7 @@ class RDBTask(luigi.Task):
                 ifile = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
                 ofile = os.path.join(BASEPATH_DB, "retention_{}.tsv.gz".format(str(date)))
 
-                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+                if os.path.exists(ifile):
+                    yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplementedError

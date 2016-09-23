@@ -213,7 +213,10 @@ class RawPath(luigi.Task):
                                 out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, pre_cookie_id, pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
                             except:
                                 out_file.write("{}{}".format(SEP.join([pre_session_number, "cookie_id", pre_creation_datetime]), SEP))
-                                out_file.write(NEXT.join(page.encode(ENCODE_UTF8) for page in pages))
+                                for idx, page in enumerate(pages):
+                                    out_file.write(page)
+                                    if idx != len(pages)-1:
+                                        out_file.write(NEXT)
                                 out_file.write("\n")
 
                             pages = []
@@ -226,7 +229,10 @@ class RawPath(luigi.Task):
                 out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, pre_cookie_id, pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
             except:
                 out_file.write("{}{}".format(SEP.join([pre_session_number, pre_cookie_id, pre_creation_datetime]), SEP))
-                out_file.write(NEXT.join(page.encode(ENCODE_UTF8) for page in pages))
+                for idx, page in enumerate(pages):
+                   out_file.write(page)
+                   if idx != len(pages)-1:
+                       out_file.write(NEXT)
                 out_file.write("\n")
 
     def output(self):
@@ -290,13 +296,9 @@ class SimpleDynamicTask(RawPath):
 
         if self.mode.lower() == "dict":
             df = {}
-            is_first = True
-
             for input in self.input():
                 logger.info("Start to process {}".format(input.fn))
                 df = mod.luigi_run(input.fn, self.filter_app, df)
-
-                is_first = False
 
             with self.output().open("wb") as out_file:
                 creation_datetime, date_type = get_date_type(self.output().fn)

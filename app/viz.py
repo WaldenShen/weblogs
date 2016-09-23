@@ -4,8 +4,10 @@ import os
 import gzip
 import json
 import luigi
+import datetime
 
-from utils import ENCODE_UTF8
+from utils import ENCODE_UTF8, SEP
+from utils import load_behaviors, create_behavior_db
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
@@ -43,3 +45,35 @@ class VizRetentionTask(luigi.Task):
     def output(self):
         return luigi.LocalTarget(self.ofile)
 
+class VizNALTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    date = luigi.DateParameter(default=datetime.datetime.now())
+
+    file_format = luigi.Parameter(default="csv")
+
+    #ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+
+    def run(self):
+        #create_behavior_db(self.ifile)
+        #logger.info("Insert records from {} into REDIS".format(self.ifile))
+
+        with self.output().open("wb") as out_file:
+            out_file.write("KEY{sep}SUBKEY{sep}VALUE\n".format(sep=SEP))
+
+            for key, behaviors in load_behaviors():
+                for name, behavior in behaviors.items():
+                    if isinstance(behavior, int):
+                        out_file.write("{}\n".format(SEP.join([key, name, str(behavior)])))
+                    else:
+                        for k, v in behavior.items():
+                            try:
+                                out_file.write(bytes("{}\n".format(SEP.join([key, k, str(v)])), ENCODE_UTF8))
+                            except:
+                                out_file.write("{}{}".format(SEP.join([key]), SEP))
+                                out_file.write(k.encode(ENCODE_UTF8))
+                                out_file.write("{}{}\n".format(SEP, v))
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)

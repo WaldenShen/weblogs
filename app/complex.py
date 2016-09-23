@@ -1,14 +1,17 @@
 #!/usr/bin/python
 
 import os
+import gzip
 import json
+import redis
 import luigi
 import logging
 from datetime import datetime
 
 from saisyo import RawPath
 from advanced.page import suffix_tree
-from utils import get_date_type, SEP, NEXT, ENCODE_UTF8
+from utils import get_date_type, load_cookie_history, save_cookie_history
+from utils import SEP, NEXT, ENCODE_UTF8, FUNCTION
 
 logger = logging.getLogger('luigi-interface')
 
@@ -102,6 +105,52 @@ class RetentionTask(luigi.Task):
             creation_datetime, date_type = get_date_type(self.output().fn)
 
             mod.luigi_dump(out_file, df, creation_datetime, date_type)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class NALTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+
+    def run(self):
+        creation_datetime, date_type = get_date_type(self.output().fn)
+
+        results = {"creation_datetime": creation_datetime, "count_new_pv": 0, "count_old_pv": 0, "count_new_uv": 0, "count_old_uv": 0}
+
+        with gzip.open(self.ifile) as in_file:
+            for line in in_file:
+                o = json.loads(line.decode(ENCODE_UTF8).strip())
+
+                cookie_id = o["cookie_id"]
+                creation_datetime = o["creation_datetime"]
+                if creation_datetime.find(".") > -1:
+                    creation_datetime = datetime.strptime(creation_datetime, "%Y-%m-%d %H:%M:%S.%f")
+                else:
+                    creation_datetime = datetime.strptime(creation_datetime, "%Y-%m-%d %H:%M:%S")
+
+                history = load_cookie_history(cookie_id)
+                if history:
+                    first_datetime = datetime.strptime(history[0], "%Y-%m-%d %H:%M:%S")
+
+                    if creation_datetime.strftime("%Y%m%d") > first_datetime.strftime("%Y%m%d"):
+                        results["count_old_pv"] += sum([c for c in o[FUNCTION].values()])
+                        results["count_old_uv"] += 1
+                    else:
+                        results["count_new_pv"] += sum([c for c in o[FUNCTION].values()])
+                        results["count_new_uv"] += 1
+                else:
+                    logger.warn("Not found {}".format(cookie_id))
+
+                    results["count_new_pv"] += sum([c for c in o[FUNCTION].values()])
+                    results["count_new_uv"] += 1
+
+                    save_cookie_history(cookie_id, creation_datetime)
+
+        with self.output().open("wb") as out_file:
+            out_file.write(json.dumps(results))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
