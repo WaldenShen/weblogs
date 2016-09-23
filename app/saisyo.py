@@ -281,6 +281,7 @@ class RawPageError(luigi.Task):
 
 class SimpleDynamicTask(RawPath):
     task_namespace = "clickstream"
+    prior = luigi.IntParameter(default=0)
 
     ofile = luigi.Parameter()
 
@@ -288,6 +289,10 @@ class SimpleDynamicTask(RawPath):
     mode = luigi.Parameter()
 
     filter_app = luigi.BoolParameter(default=False)
+
+    @property
+    def priority(self):
+        return self.prior
 
     def run(self):
         pagedict, pagecount = {}, {}
