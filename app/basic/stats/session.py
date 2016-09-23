@@ -5,7 +5,7 @@ import gzip
 import json
 
 from utils import is_app_log, parse_raw_page
-from utils import ENCODE_UTF8
+from utils import ENCODE_UTF8, DOMAIN_MAP
 
 '''
 INPUT
@@ -78,7 +78,7 @@ def luigi_run(filepath, filter_app=False, results={}):
                 pre_total_count += 1
 
     for key, info in piece.items():
-        results[key]["n_count"] += 1.0 / pre_total_count
+        results[key]["n_count"] += float(info["n_count"]) / pre_total_count
 
     return results
 

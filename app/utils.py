@@ -46,17 +46,17 @@ mybank
 平台
 網站索引
 '''
-DOMAIN_MAP = {"com.cathaybk.koko.ios.app": "KOKO",
-              "www.cathayholdings.com": "官網",
-              "www.myb2b.com.tw": "企業網銀",
-              "com.cathaybk.mmb.ios.app": "行動銀行",
-              "com.cathaybk.mymobibank.android.app": "行動銀行",
-              "www.cathaybk.com.tw": "官網",
-              "www.globalmyb2b.com": "企業網銀",
-              "www.mybank.com.tw": "網路營行",
-              "com.cathaybk.koko.android.app": "KOKO",
-              "www.kokobank.com": "KOKO",
-              "cathaybk.com.tw": "官網"}
+DOMAIN_MAP = {"com.cathaybk.koko.ios.app": "KOKO未分類",
+              "www.cathayholdings.com": "官網未分類",
+              "www.myb2b.com.tw": "企業網銀未分類",
+              "com.cathaybk.mmb.ios.app": "行動銀行未分類",
+              "com.cathaybk.mymobibank.android.app": "行動銀行未分類",
+              "www.cathaybk.com.tw": "官網未分類",
+              "www.globalmyb2b.com": "企業網銀未分類",
+              "www.mybank.com.tw": "網路銀行未分類",
+              "com.cathaybk.koko.android.app": "KOKO未分類",
+              "www.kokobank.com": "KOKO未分類",
+              "cathaybk.com.tw": "官網未分類"}
 
 FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else y + "_" + OTHER
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
@@ -129,9 +129,9 @@ def _categorized_url(url, otype="all"):
     logic1, logic2, function, intention = None, None, None, None
     if n_url in CATEGORY_URL:
         logic1, logic2, function, intention = CATEGORY_URL[n_url]["logic1"], CATEGORY_URL[n_url]["logic2"], CATEGORY_URL[n_url]["function"], CATEGORY_URL[n_url]["intention"]
-    else:
-        domain = DOMAIN_MAP.get(urlparse(url).netloc, OTHER)
-        logic1, logic2, function, intention = domain, domain, domain, domain
+    #else:
+    #    domain = DOMAIN_MAP.get(urlparse(url).netloc, OTHER)
+    #    logic1, logic2, function, intention = domain, domain, domain, domain
 
     ret = None
     if otype == "all":
@@ -305,7 +305,7 @@ def create_behavior_db(filepath):
             save_behavior(key, json.dumps(values))
 
 def unknown_urls():
-    filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-01*.tsv.gz")
+    filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-21*.tsv.gz")
 
     urls = {}
     for filepath in sorted(glob.glob(filepath_raw_page)):
@@ -325,7 +325,7 @@ def unknown_urls():
 
         print(filepath)
 
-    with open("unknown_url.txt.1", "wb") as out_file:
+    with open("unknown_url.txt", "wb") as out_file:
         for url, count in urls.items():
             out_file.write(url.encode(ENCODE_UTF8))
             out_file.write(SEP)
@@ -333,6 +333,8 @@ def unknown_urls():
             out_file.write("\n")
 
 if __name__ == "__main__":
+    unknown_urls()
+
     '''
     # Create the login_datetime database
 
@@ -343,6 +345,8 @@ if __name__ == "__main__":
             print("current filepath is {}".format(filepath))
     '''
 
+    '''
     for filepath in glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz")):
         print("Start to proceed {}".format(filepath))
         create_behavior_db(filepath)
+    '''
