@@ -4,8 +4,8 @@
 import gzip
 import json
 
-from utils import norm_url, is_app_log
-from utils import SEP, OTHER, ENCODE_UTF8, FUNC, FUNC_NONE
+from utils import norm_url, is_app_log, parse_raw_page
+from utils import OTHER, ENCODE_UTF8
 
 '''
 INPUT
@@ -31,14 +31,10 @@ active_duration     51930.0
 loading_duration    10935.3
 '''
 
-def set_record(results, cookie_id, profile_id, url, logic, function, intention, duration, active_duration, loading_duration):
-    global OTHER, FUNC
+def set_record(results, cookie_id, profile_id, url, logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention, duration, active_duration, loading_duration):
+    global OTHER
 
-    logic = FUNC(logic, "logic")
-    function = FUNC(function, "function")
-    intention = FUNC(intention, "intention")
-
-    for key_type, key in zip(["url", "logic", "function", "intention"], [url, logic, function, intention]):
+    for key_type, key in zip(["url", "logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [url, logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
         # implement your logic
         init_r = {"url": None,
                   "url_type": None,
@@ -59,25 +55,25 @@ def set_record(results, cookie_id, profile_id, url, logic, function, intention, 
         if profile_id.lower() != "none":
             results[key]["profile_view"].add(profile_id)
 
-        results[key]["duration"] += FUNC_NONE(duration)
-        results[key]["active_duration"] += FUNC_NONE(active_duration)
-        results[key]["loading_duration"] += FUNC_NONE(loading_duration)
+        results[key]["duration"] += duration
+        results[key]["active_duration"] += active_duration
+        results[key]["loading_duration"] += loading_duration
 
 def luigi_run(filepath, filter_app=False, results={}):
-    global SEP
-
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
+                session_id, cookie_id, individual_id, url, creation_datetime,\
+                logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                duration, active_duration, loading_duration = parse_raw_page(line)
 
                 if filter_app and is_app_log(url):
                     continue
 
-                set_record(results, cookie_id, individual_id, norm_url(url), logic, function, intention, duration, active_duration, loading_duration)
+                set_record(results, cookie_id, individual_id, norm_url(url), logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention, duration, active_duration, loading_duration)
 
     return results
 

@@ -4,8 +4,8 @@
 import gzip
 import json
 
-from utils import is_app_log
-from utils import SEP, ENCODE_UTF8, OTHER, FUNC
+from utils import is_app_log, parse_raw_page
+from utils import ENCODE_UTF8
 
 '''
 INPUT
@@ -20,7 +20,7 @@ session_id      cookie_id       individual_id   session_seq     url     creation
 
 OUTPUT
 ================================
-cookie_key          logic / function / intention
+cookie_key          logic1 / logic2 / function / intention
 cookie_value        # Logic: 理財/投資/信貸... Intention: 旅遊/美食/...
 date_type           hour / day / week / month / year
 creation_datetime   2016-09-01 10:16:19.283000
@@ -29,26 +29,22 @@ n_count             10
 
 
 def luigi_run(filepath, filter_app=False, results={}):
-    global SEP, ENCODE_UTF8, OTHER, FUNC
-
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
         for line in in_file:
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, url, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
+                session_id, cookie_id, individual_id, url, creation_datetime,\
+                logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                duration, active_duration, loading_duration = parse_raw_page(line)
 
                 if filter_app and is_app_log(url):
                     continue
 
-                logic = FUNC(logic, "logic")
-                function = FUNC(function, "function")
-                intention = FUNC(intention, "intention")
-
                 results.setdefault(cookie_id, {})
 
-                for name, value in zip(["logic", "function", "intention"], [logic, function, intention]):
+                for name, value in zip(["logic1", "logic2", "function", "intention"], [logic1, logic2, function, intention]):
                     key = name + "_" + value
                     results[cookie_id].setdefault(key, 0)
                     results[cookie_id][key] += 1
@@ -69,7 +65,7 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
             r[key]["category_value"] = category_value
             r[key].setdefault("n_count", 0)
 
-            if key.find("logic") > -1:
+            if key.find("logic1") > -1:
                 total_count += value
 
         for key, value in info.items():

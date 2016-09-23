@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import re
+import json
 import gzip
 import pandas as pd
 
@@ -21,12 +22,15 @@ class CommonPath(object):
                     self.paths.setdefault(key, set())
                     self.paths[key].add(session_id)
 
-    def print_tree(self, how_many_people=20, how_long_path=6):
+    def print_tree(self, creation_datetime, date_type, how_many_people=30, how_long_path=7):
         for paths, session_ids in self.paths.items():
             session_ids = list(session_ids)
 
             if len(session_ids) > how_many_people and len(paths) > how_long_path:
-                yield session_ids, paths
+                yield json.dumps({"creation_datetime": creation_datetime,
+                                  "date_type": date_type,
+                                  "common_path": paths,
+                                  "session_ids": session_ids})
 
 if __name__ == "__main__":
     filepath = "../../../data/raw/path_2016-08-01.csv.gz"

@@ -12,7 +12,7 @@ import jaydebeapi as jdbc
 from luigi import date_interval as d
 
 from rdb import TeradataTable
-from utils import load_category, norm_url, get_date_type, is_app_log
+from utils import norm_url, get_date_type, is_app_log, _categorized_url
 from utils import SEP, NEXT, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
@@ -32,7 +32,7 @@ class ClickstreamFirstRaw(luigi.Task):
     hour = luigi.IntParameter()
 
     ofile = luigi.Parameter()
-    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
+    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,duration,active_duration,loading_time,ip")
 
     def run(self):
         global BASEPATH_DRIVER, FILEPATH_CATEGORY
@@ -40,8 +40,6 @@ class ClickstreamFirstRaw(luigi.Task):
         table = ""
         if self.date.month != datetime.datetime.now().month:
             table = "{}{:02d}".format(self.date.year, self.date.month)
-
-        category = load_category(FILEPATH_CATEGORY)
 
         results = {}
 
@@ -61,14 +59,9 @@ class ClickstreamFirstRaw(luigi.Task):
             try:
                 session_number, seq, url, creation_datetime, duration, active_duration, loading_duration = row
                 url = url.lower()
-                n_url = norm_url(url)
-
-                function, logic, intention = None, None, None
-                if n_url in category:
-                    function, logic, intention = category[n_url]["function"], category[n_url]["logic"], category[n_url]["intention"]
 
                 results.setdefault(session_number, [])
-                results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, function, logic, intention, duration, active_duration, loading_duration, "ip"])
+                results[session_number].append(["cookie_id", "individual_id", seq, url, creation_datetime, duration, active_duration, loading_duration, "ip"])
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
@@ -134,15 +127,18 @@ class ClickstreamFirstRaw(luigi.Task):
 class RawPath(luigi.Task):
     task_namespace = "clickstream"
 
-    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,function,logic,intention,duration,active_duration,loading_time,ip")
+    columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,duration,active_duration,loading_time,ip")
+    ofile = luigi.Parameter()
 
     interval = luigi.DateIntervalParameter()
     hour = luigi.IntParameter(default=-1)
 
+    ntype = luigi.Parameter(default="url")
+
     def requires(self):
         global BASEPATH_TEMP
 
-        ofile = "{basepath}/page_{date}_{hour}.csv.gz"
+        ofile = "{basepath}/page_{date}_{hour}.tsv.gz"
         if self.hour == -1:
             for date in self.interval:
                 for hour in range(0, 24):
@@ -161,56 +157,86 @@ class RawPath(luigi.Task):
             except:
                 out_file.write(SEP.join(["session_id", "cookie_id", "creation_datetime", "npath\n"]))
 
-            pre_session_number, pre_creation_datetime, pre_sequence, pages = None, None, None, []
+            pre_session_number, pre_cookie_id, pre_creation_datetime, pre_sequence, pages = None, None, None, None, []
             for input in self.input():
+                is_header = True
                 with input.open("r") as in_file:
                     for row in in_file:
+                        if is_header:
+                            is_header = False
+                            continue
+
                         # 0: session_id
                         # 1: cookie_id
                         # 2: individual_id
                         # 3: session_seq
                         # 4: url
                         # 5: creation_datetime
-                        # 6: function
-                        # 7: logic
-                        # 8: Intention
-                        # 9: duration
-                        # 10: active_duration
-                        # 11: loading_time
-                        # 12: ip
+                        # 6: duration
+                        # 7: active_duration
+                        # 8: loading_time
+                        # 9: ip
 
-                        info = row.decode(ENCODE_UTF8).strip().split(SEP)
-                        session_number, _, _, sequence, url, creation_datetime, _, _, _, _, _, _, _ = info
+                        session_number, cookie_id, _, sequence, url, creation_datetime, _, _, _, _ = row.decode(ENCODE_UTF8).strip().split(SEP)
                         if is_app_log(url):
                             continue
 
                         url = norm_url(url)
+                        logic1, logic2, function, intention = _categorized_url(url)
+
+                        page = url
+                        if self.ntype == "logic1":
+                            page = logic1
+                        elif self.ntype == "logic2":
+                            page = logic2
+                        elif self.ntype == "function":
+                            page = function
+                        elif self.ntype == "intention":
+                            page = intention
+                        elif self.ntype == "logic":
+                            page = logic1 + "_" + logic2
+                        elif self.ntype == "logic1function":
+                            page = logic1 + "_" + function
+                        elif self.ntype == "logic2function":
+                            page = logic2 + "_" + function
+                        elif self.ntype == "logic1intention":
+                            page = logic1 + "_" + intention
+                        elif self.ntype == "logic2intention":
+                            page = logic2 + "_" + intention
+                        else:
+                            raise NotImplementedError
+
+                        #logger.info((self.ntype, url, page))
 
                         if pre_session_number is not None and pre_session_number != session_number:
                             try:
-                                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+                                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, pre_cookie_id, pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
                             except:
                                 out_file.write("{}{}".format(SEP.join([pre_session_number, "cookie_id", pre_creation_datetime]), SEP))
-                                out_file.write(NEXT.join(page.encode(ENCODE_UTF8) for page in pages))
+                                for idx, page in enumerate(pages):
+                                    out_file.write(page)
+                                    if idx != len(pages)-1:
+                                        out_file.write(NEXT)
                                 out_file.write("\n")
 
                             pages = []
 
-                        pages.append(url)
+                        pages.append(page)
 
-                        pre_session_number, pre_creation_datetime, pre_sequence = session_number, creation_datetime, sequence
+                        pre_session_number, pre_cookie_id, pre_creation_datetime, pre_sequence = session_number, cookie_id, creation_datetime, sequence
 
             try:
-                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, "cookie_id", pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
+                out_file.write(bytes("{}{sep}{}{sep}{}{sep}{}\n".format(pre_session_number, pre_cookie_id, pre_creation_datetime, NEXT.join(pages), sep=SEP), ENCODE_UTF8))
             except:
-                out_file.write("{}{}".format(SEP.join([pre_session_number, "cookie_id", pre_creation_datetime]), SEP))
-                out_file.write(NEXT.join(page.encode(ENCODE_UTF8) for page in pages))
+                out_file.write("{}{}".format(SEP.join([pre_session_number, pre_cookie_id, pre_creation_datetime]), SEP))
+                for idx, page in enumerate(pages):
+                   out_file.write(page)
+                   if idx != len(pages)-1:
+                       out_file.write(NEXT)
                 out_file.write("\n")
 
     def output(self):
-        global BASEPATH_RAW
-
-        return luigi.LocalTarget("{}/path_{}.csv.gz".format(BASEPATH_RAW, self.interval), format=luigi.format.Gzip)
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
 class RawPageError(luigi.Task):
     task_namespace = "clickstream"
@@ -222,9 +248,8 @@ class RawPageError(luigi.Task):
     def requires(self):
         global BASEPATH_TEMP
 
-        columns = "SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription"
         query = "SELECT SessionNumber,PageInstanceID,EventTimestamp,ErrorDescription FROM VP_OP_ADC.pageerror{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59'"
-        ofile = "{}/page_error_{}_{}.csv.gz"
+        ofile = "{}/pageerror_{}_{}.tsv.gz"
 
         for date in self.interval:
             for hour in range(0, 24):
@@ -232,8 +257,7 @@ class RawPageError(luigi.Task):
                 if date.month != datetime.datetime.now().month:
                     table = "{}{:02d}".format(date.year, date.month)
 
-                yield TeradataTable(columns=columns,
-                                    query=query.format(table=table, date=date, hour="{:02d}".format(hour)),
+                yield TeradataTable(query=query.format(table=table, date=date, hour="{:02d}".format(hour)),
                                     ofile=ofile.format(BASEPATH_TEMP, date, "{:02d}".format(hour)))
 
     def run(self):
@@ -272,13 +296,9 @@ class SimpleDynamicTask(RawPath):
 
         if self.mode.lower() == "dict":
             df = {}
-            is_first = True
-
             for input in self.input():
                 logger.info("Start to process {}".format(input.fn))
                 df = mod.luigi_run(input.fn, self.filter_app, df)
-
-                is_first = False
 
             with self.output().open("wb") as out_file:
                 creation_datetime, date_type = get_date_type(self.output().fn)

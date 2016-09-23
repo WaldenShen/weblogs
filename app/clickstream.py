@@ -8,7 +8,7 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
@@ -58,8 +58,8 @@ class RawTask(luigi.Task):
             ofile_stats_website = os.path.join(BASEPATH_STATS, "website_{}.tsv.gz".format(self.interval))
             yield SimpleDynamicTask(interval=self.interval, filter_app=True, ofile=ofile_stats_website, **self.stats_website)
 
-            #ofile_page_error = os.path.join(BASEPATH_RAW, "pageerror_{}.tsv.gz".format(self.interval))
-            #yield RawPageError(interval=self.interval, ofile=ofile_page_error)
+            ofile_page_error = os.path.join(BASEPATH_RAW, "pageerror_{}.tsv.gz".format(self.interval))
+            yield RawPageError(interval=self.interval, ofile=ofile_page_error)
         elif self.mode == "range":
             for date in self.interval:
                 interval = d.Date.parse(str(date))
@@ -82,8 +82,8 @@ class RawTask(luigi.Task):
                 ofile_stats_website = os.path.join(BASEPATH_STATS, "website_{}.tsv.gz".format(str(date)))
                 yield SimpleDynamicTask(interval=interval, filter_app=True, ofile=ofile_stats_website, **self.stats_website)
 
-                #ofile_page_error = os.path.join(BASEPATH_RAW, "pageerror_{}.tsv.gz".format(str(date)))
-                #yield RawPageError(interval=interval, ofile=ofile_page_error)
+                ofile_page_error = os.path.join(BASEPATH_RAW, "pageerror_{}.tsv.gz".format(str(date)))
+                yield RawPageError(interval=interval, ofile=ofile_page_error)
 
                 for hour in range(0, 24):
                     ofile_stats_page = os.path.join(BASEPATH_STATS, "page_{}{:02d}.tsv.gz".format(str(date), hour))
@@ -104,7 +104,10 @@ class AdvancedTask(luigi.Task):
     task_namespace = "clickstream"
 
     mode = luigi.Parameter(default="range")
+    trackday = luigi.IntParameter(default=56)
     interval = luigi.DateIntervalParameter()
+
+    is_retention = luigi.BoolParameter()
 
     adv_corr = luigi.DictParameter(default={"lib": "advanced.page.correlation", "length": 4})
     adv_retention = luigi.DictParameter(default={"lib": "advanced.cookie.retention"})
@@ -113,40 +116,37 @@ class AdvancedTask(luigi.Task):
         global BASEPATH_RAW, BASEPATH_ADV
 
         if self.mode.lower() == "single":
-            for node_type in ["url", "logic", "function", "intention"]:
+            for node_type in ["logic1", "logic2", "function", "intention"]:
                 ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
-                yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, node_type=node_type, **self.adv_corr)
+                yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, ntype=node_type, **self.adv_corr)
 
-            ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(self.interval))
-            yield CommonPathTask(interval=self.interval, ofile=ofile_common_path)
+            for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"]:
+                ofile_common_path = os.path.join(BASEPATH_ADV, "{}commonpath_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
+                yield CommonPathTask(ntype=node_type, interval=self.interval, ofile=ofile_common_path)
         elif self.mode.lower() == "range":
             for date in self.interval:
                 interval = d.Date.parse(str(date))
 
-                for node_type in ["url", "logic", "function", "intention"]:
-                    ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, str(date)))
-                    yield PageCorrTask(ofile=ofile_page_corr, interval=interval, node_type=node_type, **self.adv_corr)
-
-                #ofile_common_path = os.path.join(BASEPATH_ADV, "commonpath_{}.tsv.gz".format(str(date)))
-                #yield CommonPathTask(interval=interval, ofile=ofile_common_path)
-
                 # 4 weeks data
-                ifiles = []
-                now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
-                for i in range(28, -1, -1):
-                    ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format((now - datetime.timedelta(days=i)).strftime("%Y-%m-%d")))
-                    if os.path.exists(ifile):
-                        ifiles.append(ifile)
-                    else:
-                        logger.warn("Not found {} for retention calculation".format(ifile))
+                if self.is_retention and (self.interval.date_b - datetime.timedelta(days=1)).strftime("%Y-%m-%d") == date.strftime("%Y-%m-%d"):
+                    now = datetime.datetime.strptime(str(date), "%Y-%m-%d")
+                    ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
+                    yield RetentionTask(date=(self.interval.date_b-datetime.timedelta(days=self.trackday)), ofile=ofile_retention_path, **self.adv_retention)
 
-                ofile_retention_path = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
-                yield RetentionTask(ifile=ifiles, ofile=ofile_retention_path, **self.adv_retention)
+                ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
+                yield NALTask(ifile=ifile, ofile=ofile)
+
+                '''
+                for node_type in ["url", "logic1", "logic2", "function", "intention"]:
+                    ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, str(date)))
+                    yield PageCorrTask(ofile=ofile_page_corr, interval=interval, ntype=node_type, **self.adv_corr)
 
                 for hour in range(0, 24):
-                    for node_type in ["url", "logic", "function", "intention"]:
+                    for node_type in ["url", "logic1", "logic2", "function", "intention"]:
                         ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}{:02d}.tsv.gz".format(node_type, str(date), hour))
-                        yield PageCorrTask(ofile=ofile_page_corr, interval=interval, hour=hour, node_type=node_type, **self.adv_corr)
+                        yield PageCorrTask(ofile=ofile_page_corr, interval=interval, hour=hour, ntype=node_type, **self.adv_corr)
+                '''
         else:
             raise NotImplementedError
 
@@ -167,7 +167,7 @@ class RDBTask(luigi.Task):
                 table = "stats_{}".format(stats_type)
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-            for node_type in ["url", "logic", "function", "intention"]:
+            for node_type in ["logic1", "logic2", "function", "intention"]:
                 ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
                 ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type, self.interval))
 
@@ -189,6 +189,14 @@ class RDBTask(luigi.Task):
                     table = "stats_{}".format(stats_type)
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
+            for date in self.interval:
+                ifile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_DB, "nal_{}.tsv.gz".format(str(date)))
+                table = "stats_nal"
+
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+            '''
             table = "adv_pagecorr"
             for node_type in ["url", "logic", "function", "intention"]:
                 for date in self.interval:
@@ -202,12 +210,14 @@ class RDBTask(luigi.Task):
                     ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type, str(date)))
 
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+            '''
 
             table = "adv_retention"
             for date in self.interval:
                 ifile = os.path.join(BASEPATH_ADV, "retention_{}.tsv.gz".format(str(date)))
                 ofile = os.path.join(BASEPATH_DB, "retention_{}.tsv.gz".format(str(date)))
 
-                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+                if os.path.exists(ifile):
+                    yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplementedError

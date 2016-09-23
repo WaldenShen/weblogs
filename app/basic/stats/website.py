@@ -3,14 +3,15 @@
 
 import gzip
 import json
+import pprint
 
 try:
     from urlparse import urlparse
 except ImportError:
     from urllib.parse import urlparse
 
-from utils import is_app_log
-from utils import SEP, ENCODE_UTF8, OTHER, FUNC, FUNC_NONE
+from utils import is_app_log, parse_raw_page
+from utils import ENCODE_UTF8
 
 '''
 INPUT
@@ -36,14 +37,13 @@ loading_duration        937515.0
 count_failed            -- 先忽略
 count_session           253515
 count_cookie            193152
-count_logic             {"理財": 12, "信貸": 1}
+count_logic1             {"理財": 12, "信貸": 1}
+count_logic2
 count_function          {"登入": 1, "查詢": 2}
 count_intention         {"旅遊": 1, "有車": 5}
 '''
 
 def luigi_run(filepath, filter_app=False, results={}):
-    global SEP, OTHER, ENCODE_UTF8, INIT_R, FUNC
-
     with gzip.open(filepath, "rb") as in_file:
         is_header = True
         session = None
@@ -52,7 +52,9 @@ def luigi_run(filepath, filter_app=False, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, _, url, _, function, logic, intention, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
+                session_id, cookie_id, individual_id, url, creation_datetime,\
+                logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                duration, active_duration, loading_duration = parse_raw_page(line)
 
                 if filter_app and is_app_log(url):
                     continue
@@ -69,9 +71,15 @@ def luigi_run(filepath, filter_app=False, results={}):
                               "loading_duration": 0,
                               "count_failed": 0,
                               "count_session": 0,
-                              "count_logic": {},
+                              "count_logic1": {},
+                              "count_logic2": {},
                               "count_function": {},
-                              "count_intention": {}}
+                              "count_intention": {},
+                              "count_logic": {},
+                              "count_logic1_function": {},
+                              "count_logic2_function": {},
+                              "count_logic1_intention": {},
+                              "count_logic2_intention": {}}
 
                     results.setdefault(domain, init_r)
 
@@ -82,24 +90,16 @@ def luigi_run(filepath, filter_app=False, results={}):
                     if individual_id.lower() != "none":
                         results[domain]["profile_view"].add(individual_id)
 
-                    results[domain]["duration"] += FUNC_NONE(duration)
-                    results[domain]["active_duration"] += FUNC_NONE(active_duration)
-                    results[domain]["loading_duration"] += FUNC_NONE(loading_duration)
+                    results[domain]["duration"] += duration
+                    results[domain]["active_duration"] += active_duration
+                    results[domain]["loading_duration"] += loading_duration
 
                     if session_id != session:
                         results[domain]["count_session"] += 1
 
-                    logic = FUNC(logic, "logic")
-                    results[domain]["count_logic"].setdefault(logic, 0)
-                    results[domain]["count_logic"][logic] += 1
-
-                    function = FUNC(function, "function")
-                    results[domain]["count_function"].setdefault(function, 0)
-                    results[domain]["count_function"][function] += 1
-
-                    intention = FUNC(intention, "intention")
-                    results[domain]["count_intention"].setdefault(intention, 0)
-                    results[domain]["count_intention"][intention] += 1
+                    for key, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
+                        results[domain]["count_{}".format(key)].setdefault(value, 0)
+                        results[domain]["count_{}".format(key)][value] += 1
 
                 session = session_id
 
@@ -115,11 +115,21 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
         d["user_view"] = len(d["user_view"])
         d["profile_view"] = len(d["profile_view"])
 
-        d["count_logic"] = json.dumps(d["count_logic"])
-        d["count_function"] = json.dumps(d["count_function"])
-        d["count_intention"] = json.dumps(d["count_intention"])
+        for key in ["count_logic1", "count_logic2", "count_function", "count_intention", "count_logic", "count_logic1_function", "count_logic2_function", "count_logic1_intention", "count_logic2_intention"]:
+            d[key] = json.dumps(d[key])
 
         try:
             out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
         except:
             out_file.write("{}\n".format(json.dumps(d)))
+
+if __name__ == "__main__":
+    import glob
+    filepath = "../data/temp/page_2016-09-01_10.tsv.gz"
+
+    df = {}
+    for filepath in glob.glob("../data/temp/page_2016-09-01_*gz"):
+        df = luigi_run(filepath, True, df)
+
+    luigi_dump("tt.tsv.gz", df, "2016-09-01_10", "hour")
+            

@@ -81,7 +81,6 @@ class TeradataTable(luigi.Task):
     batch_size = luigi.IntParameter(default=10000)
 
     ofile = luigi.Parameter()
-    columns = luigi.Parameter()
 
     def run(self):
         connection = get_connection()
@@ -96,8 +95,12 @@ class TeradataTable(luigi.Task):
         except jdbc.DatabaseError:
             count_error += 1
 
+        columns = [column[0] for column in cursor.description]
         with self.output().open('wb') as out_file:
-            out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
+            try:
+                out_file.write(bytes("{}\n".format(SEP.join(columns)), ENCODE_UTF8))
+            except:
+                out_file.write("{}\n".format(SEP.join(columns)))
 
             try:
                 while True:
@@ -107,10 +110,8 @@ class TeradataTable(luigi.Task):
                         for row in results:
                            try:
                                 out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
-                           except UnicodeEncodeError as e:
-                                logger.warn(e)
-
-                                count_error += 1
+                           except:
+                                out_file.write("{}\n".format(SEP.join([str(r) for r in row])))
                     else:
                         break
             except jdbc.Error as e:
@@ -166,3 +167,13 @@ class SqlliteTable(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+if __name__ == "__main__":
+    conn = get_connection()
+
+    sql = "SELECT * FROM DP_MCIF_REF.RD_ABT_PROD_CODE;"
+    cursor = conn.cursor()
+    cursor.execute(sql)
+    print([column[0] for column in cursor.description])
+
+    conn.close()
