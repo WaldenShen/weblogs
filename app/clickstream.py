@@ -118,7 +118,7 @@ class AdvancedTask(luigi.Task):
         global BASEPATH_RAW, BASEPATH_ADV
 
         if self.mode.lower() == "single":
-            for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic_intention"]:
+            for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"]:
                 ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
                 yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, ntype=node_type, **self.adv_corr)
 
