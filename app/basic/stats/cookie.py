@@ -44,7 +44,7 @@ def luigi_run(filepath, filter_app=False, results={}):
 
                 results.setdefault(cookie_id, {})
 
-                for name, value in zip(["logic1", "logic2", "function", "intention"], [logic1, logic2, function, intention]):
+                for name, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
                     key = name + "_" + value
                     results[cookie_id].setdefault(key, 0)
                     results[cookie_id][key] += 1

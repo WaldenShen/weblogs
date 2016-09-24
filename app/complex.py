@@ -169,7 +169,7 @@ class CookieHistoryTask(luigi.Task):
             with gzip.open(self.ifile, "rb") as in_file:
                 for line in in_file:
                     o = json.loads(line.decode(ENCODE_UTF8))
-                    cookie_id, creation_datetime = o["cookie_id"], parse_datetime(o["creation_datetime"])
+                    profile_id, cookie_id, creation_datetime = o["profile_id"]. o["cookie_id"], parse_datetime(o["creation_datetime"])
                     creation_datetime = creation_datetime.replace(microsecond=0)
 
                     logic1, logic2, function, intention = o[LOGIC1], o[LOGIC2], o[FUNCTION], o[INTENTION]
@@ -199,7 +199,8 @@ class CookieHistoryTask(luigi.Task):
                                     for name, value in values.items():
                                         name = name.replace(" ", "").replace(u"投資理財", u"理財投資")
 
-                                        results = {"cookie_id": cookie_id,
+                                        results = {"individual_id": profile_id,
+                                                   "cookie_id": cookie_id,
                                                    "category_type": subkey,
                                                    "times": idx+1,
                                                    "creation_datetime": login_datetime.strftime("%Y-%m-%d %H:%M:%S"),
@@ -213,7 +214,7 @@ class CookieHistoryTask(luigi.Task):
                                         out_file.write("{}\n".format(json.dumps(results)))
                                 break
 
-                        pre_datetime = login_datetime
+                            pre_datetime = login_datetime
                     else:
                         logger.warn("Not found {} in 'login' database in {}".format(cookie_id, self.ifile))
 
