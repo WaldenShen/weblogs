@@ -211,7 +211,7 @@ class CookieHistoryTask(luigi.Task):
                                                    "total_count2": total_count}
 
                                         out_file.write("{}\n".format(json.dumps(results)))
-                            break
+                                break
 
                         pre_datetime = login_datetime
                     else:
