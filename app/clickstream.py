@@ -119,7 +119,7 @@ class AdvancedTask(luigi.Task):
 
         if self.mode.lower() == "single":
             for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic_intention"]:
-                ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
+                ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
                 yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, ntype=node_type, **self.adv_corr)
 
             for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"]:
@@ -182,9 +182,9 @@ class RDBTask(luigi.Task):
                 table = "stats_{}".format(stats_type)
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-            for node_type in ["logic1", "logic2", "function", "intention"]:
+            for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"]:
                 ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
-                ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type, self.interval))
+                ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
 
                 table = "adv_pagecorr"
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)

@@ -144,6 +144,16 @@ def _categorized_url(url, otype="all"):
         ret = FUNC(intention, INTENTION)
     elif otype == "logic":
         ret = FUNC(logic1, LOGIC1) + "_" + FUNC(logic2, LOGIC2)
+    elif otype == "logic1_function":
+        ret = FUNC(logic2, LOGIC1) + "_" + FUNC(function, FUNCTION)
+    elif otype == "logic2_function":
+        ret = FUNC(logic2, LOGIC2) + "_" + FUNC(function, FUNCTION)
+    elif otype == "logic1_intention":
+        ret = FUNC(logic1, LOGIC1) + "_" + FUNC(intention, INTENTION)
+    elif otype == "logic2_intention":
+        ret = FUNC(logic2, LOGIC2) + "_" + FUNC(intention, INTENTION)
+    else:
+        raise NotImplementedError
 
     return ret
 
