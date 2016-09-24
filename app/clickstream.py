@@ -8,7 +8,7 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, CookieHistoryTask, MappingTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
@@ -137,6 +137,12 @@ class AdvancedTask(luigi.Task):
                 ofile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
                 yield NALTask(ifile=ifile, ofile=ofile)
 
+                ofile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(str(date)))
+                yield CookieHistoryTask(ifile=ifile, ofile=ofile)
+
+                ofile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
+                yield MappingTask(ifile=ifile, ofile=ofile)
+
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:
                     ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, str(date)))
@@ -193,6 +199,18 @@ class RDBTask(luigi.Task):
                 ifile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
                 ofile = os.path.join(BASEPATH_DB, "nal_{}.tsv.gz".format(str(date)))
                 table = "stats_nal"
+
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+                ifile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_DB, "cookiehistory_{}.tsv.gz".format(str(date)))
+                table = "history_cookie"
+
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+                ifile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_DB, "mapping_{}.tsv.gz".format(str(date)))
+                table = "mapping_id"
 
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 

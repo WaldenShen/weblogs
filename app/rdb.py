@@ -15,7 +15,7 @@ logger = logging.getLogger('luigi-interface')
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_DRIVER = os.path.join(BASEPATH, "drivers")
-BASEPATH_SQLLITE = os.path.join(BASEPATH, "data", "sqllite")
+BASEPATH_SQLLITE = os.path.join(BASEPATH, "data", "sqlite")
 
 
 def get_connection():

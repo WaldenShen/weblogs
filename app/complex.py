@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# coding=UTF-8
 
 import os
 import gzip
@@ -10,8 +11,8 @@ from datetime import datetime
 
 from saisyo import RawPath
 from advanced.page import suffix_tree
-from utils import get_date_type, load_cookie_history, save_cookie_history
-from utils import SEP, NEXT, ENCODE_UTF8, FUNCTION
+from utils import get_date_type, parse_datetime, load_cookie_history, save_cookie_history
+from utils import SEP, NEXT, ENCODE_UTF8, FUNCTION, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
 
 logger = logging.getLogger('luigi-interface')
 
@@ -151,6 +152,90 @@ class NALTask(luigi.Task):
 
         with self.output().open("wb") as out_file:
             out_file.write(json.dumps(results))
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class CookieHistoryTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+
+    def run(self):
+        global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
+
+        with self.output().open("wb") as out_file:
+            with gzip.open(self.ifile, "rb") as in_file:
+                for line in in_file:
+                    o = json.loads(line.decode(ENCODE_UTF8))
+                    cookie_id, creation_datetime = o["cookie_id"], parse_datetime(o["creation_datetime"])
+                    creation_datetime = creation_datetime.replace(microsecond=0)
+
+                    logic1, logic2, function, intention = o[LOGIC1], o[LOGIC2], o[FUNCTION], o[INTENTION]
+
+                    history = load_cookie_history(cookie_id)
+                    if history:
+                        first_datetime, pre_datetime = None, None
+                        for idx, login_datetime in enumerate([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history]):
+                            if first_datetime is None:
+                                first_datetime = login_datetime
+
+                            diff_seconds = 0
+                            if pre_datetime is not None:
+                                diff_seconds = (login_datetime - pre_datetime).total_seconds()
+
+                            if creation_datetime == login_datetime:
+                                key = "TIME_{}".format(idx+1)
+
+                                for subkey, values in zip([LOGIC1, LOGIC2, FUNCTION, INTENTION], [logic1, logic2, function, intention]):
+                                    tc, total_count = 0, 0
+                                    for name, value in values.items():
+                                        if UNKNOWN not in name and name.find(u"其他") == -1:
+                                            total_count += value
+
+                                        tc += value
+
+                                    for name, value in values.items():
+                                        name = name.replace(" ", "").replace(u"投資理財", u"理財投資")
+
+                                        results = {"cookie_id": cookie_id,
+                                                   "category_type": subkey,
+                                                   "times": idx+1,
+                                                   "creation_datetime": login_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+                                                   "first_interval": (login_datetime-first_datetime).total_seconds(),
+                                                   "prev_interval": diff_seconds,
+                                                   "category_key": name.encode(ENCODE_UTF8),
+                                                   "category_value": value,
+                                                   "total_count1": tc,
+                                                   "total_count2": total_count}
+
+                                        out_file.write("{}\n".format(json.dumps(results)))
+                            break
+
+                        pre_datetime = login_datetime
+                    else:
+                        logger.warn("Not found {} in 'login' database in {}".format(cookie_id, self.ifile))
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class MappingTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+
+    def run(self):
+        global ENCODE_UTF8
+
+        with self.output().open("wb") as out_file:
+            with gzip.open(self.ifile, "rb") as in_file:
+                for line in in_file:
+                    o = json.loads(line.decode(ENCODE_UTF8))
+                    cookie_id, profile_id, creation_datetime = o["cookie_id"], o["individual_id"], o["creation_datetime"]
+
+                    out_file.write("{}\n".format(json.dumps({"cookie_id": cookie_id, "individual_id": profile_id, "creation_datetime": creation_datetime})))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)

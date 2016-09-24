@@ -66,9 +66,6 @@ CATEGORY_URL = None
 CONN_LOGIN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
 DB_LOGIN_REDIS = redis.Redis(connection_pool=CONN_LOGIN_REDIS)
 
-CONN_BEHAVIOR_REDIS = redis.ConnectionPool(host='localhost', port=6380, db=0)
-DB_BEHAVIOR_REDIS = redis.Redis(connection_pool=CONN_BEHAVIOR_REDIS)
-
 def load_category(filepath=FILEPATH_CATEGORY):
     results = {}
 
@@ -235,84 +232,6 @@ def create_cookie_history(filepath):
     print("The size of db is {}".format(len(DB_LOGIN_REDIS.keys())))
     print("The key of last record is {}".format(cookie_id))
 
-def load_behavior(key):
-    global DB_BEHAVIOR_REDIS
-
-    ret = DB_BEHAVIOR_REDIS.get(key)
-    if ret:
-        ret = json.loads(ret)
-
-    return ret
-
-def load_behaviors():
-    global DB_BEHAVIOR_REDIS
-
-    for key in DB_BEHAVIOR_REDIS.keys():
-        yield key, load_behavior(key)
-
-def save_behavior(key, value):
-    global DB_BEHAVIOR_REDIS
-
-    DB_BEHAVIOR_REDIS.set(key, value)
-
-def create_behavior(filepath):
-    global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
-
-    results = {}
-    with gzip.open(filepath, "rb") as in_file:
-        for line in in_file:
-            o = json.loads(line.decode(ENCODE_UTF8))
-            cookie_id, creation_datetime = o["cookie_id"], parse_datetime(o["creation_datetime"])
-            logic1, logic2, function, intention = o[LOGIC1], o[LOGIC2], o[FUNCTION], o[INTENTION]
-
-            history = load_cookie_history(cookie_id)
-            if history:
-                for idx, login_datetime in enumerate([datetime.datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history]):
-                    if creation_datetime == login_datetime:
-                        key = "TIME_{}".format(idx+1)
-
-                        results.setdefault(key, {COUNT: 0, LOGIC1: {}, LOGIC2: {}, FUNCTION: {}, INTENTION: {}})
-
-                        for subkey, values in zip([LOGIC1, LOGIC2, FUNCTION, INTENTION], [logic1, logic2, function, intention]):
-                            tc, total_count = 0, 0
-                            for name, value in values.items():
-                                if UNKNOWN not in name and name.find(u"其他") == -1:
-                                    total_count += value
-
-                                tc += value
-
-                            if total_count > 0:
-                                for name, value in values.items():
-                                    name = name.replace(" ", "").replace(u"投資理財", u"理財投資")
-                                    results[key][subkey].setdefault(name, 0)
-                                    results[key][subkey][name] += float(value) / total_count
-
-                        results[key][COUNT] += 1
-
-                        break
-
-            else:
-                print("Not found {} in 'login' database".format(cookie_id))
-
-    print("finish {} with {}".format(filepath, results.keys()))
-
-    for key, values in results.items():
-        ret = load_behavior(key)
-        if ret:
-            for subkey, category in values.items():
-                if isinstance(category, int):
-                    ret[subkey] += category
-                else:
-                    for name, value in category.items():
-                        ret[subkey].setdefault(name, 0)
-                        ret[subkey][name] += value
-
-            print("update {}".format(key))
-            save_behavior(key, json.dumps(ret))
-        else:
-            print("not found {}".format(key))
-            save_behavior(key, json.dumps(values))
-
 def unknown_urls():
     filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-21*.tsv.gz")
 
@@ -352,8 +271,8 @@ if __name__ == "__main__":
             print("current filepath is {}".format(filepath))
     '''
 
-    for filepath in glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz")):
+    out_file = gzip.open("cookie_behavior.gz", "ab")
+    for filepath in sorted(glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz"))):
         print("Start to proceed {}".format(filepath))
-        create_behavior(filepath)
-
-        break
+        create_behavior(filepath, out_file)
+    out_file.close()
