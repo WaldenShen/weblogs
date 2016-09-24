@@ -260,6 +260,11 @@ def unknown_urls():
             out_file.write(str(count))
             out_file.write("\n")
 
+def norm_str(value):
+    global ENCODE_UTF8
+
+    return re.sub("({}_|{}_|{}_|{}_)".format(LOGIC1, LOGIC2, FUNCTION, INTENTION), "", value).strip("_")
+
 if __name__ == "__main__":
     '''
     # Create the login_datetime database

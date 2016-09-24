@@ -40,8 +40,6 @@ def luigi_run(FILEPATH, node_type, chain_length=2, pagedict={}, pagecount={}):
         session = line[0]
         seq = line[1]
         start_page = line[2]
-        #if node_type != PAGELINK:
-        #    start_page = line[3]
 
         if is_app_log(start_page):
             continue
@@ -49,7 +47,6 @@ def luigi_run(FILEPATH, node_type, chain_length=2, pagedict={}, pagecount={}):
         for level in range(0, chain_length):
             score = float(chain_length - level) / chain_length
 
-            #print((count + level <= DL, session, count, count+level, sessionall[SESSION][count], sessionall[SESSION][count + level], session == sessionall[SESSION][count + level]))
             if count + level <= DL and session == sessionall[SESSION][count + level]:  # 往後 level 個page為同一個Session
                 if seq == 1:  # 網頁第一筆資料 session
                     next_page(pagedict, START, sessionall[PAGELINK][count + level], score)

@@ -7,18 +7,25 @@ import luigi
 import datetime
 
 from utils import ENCODE_UTF8, SEP
-from utils import load_behaviors, create_behavior_db
+from utils import load_behaviors, create_behavior_db, norm_str
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 
 
-class VizRetentionTask(luigi.Task):
+class VizTask(luigi.Task):
     task_namespace = "clickstream"
 
     ifile = luigi.Parameter()
     ofile = luigi.Parameter()
 
+    def run(self):
+        raise NotImplementedError
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class VizRetentionTask(VizTask):
     def run(self):
         global BASEPATH_ADV
 
@@ -42,22 +49,12 @@ class VizRetentionTask(luigi.Task):
                 except:
                     out_file.write("'{}': [{}],\n".format(login_datetime, ",".join([str(c) for c in results[login_datetime]])))
 
-    def output(self):
-        return luigi.LocalTarget(self.ofile)
-
 class VizNALTask(luigi.Task):
-    task_namespace = "clickstream"
-
     date = luigi.DateParameter(default=datetime.datetime.now())
 
-    file_format = luigi.Parameter(default="csv")
-
-    #ifile = luigi.Parameter()
-    ofile = luigi.Parameter()
-
     def run(self):
-        #create_behavior_db(self.ifile)
-        #logger.info("Insert records from {} into REDIS".format(self.ifile))
+        create_behavior_db(self.ifile)
+        logger.info("Insert records from {} into REDIS".format(self.ifile))
 
         with self.output().open("wb") as out_file:
             out_file.write("KEY{sep}SUBKEY{sep}VALUE\n".format(sep=SEP))
@@ -75,5 +72,52 @@ class VizNALTask(luigi.Task):
                                 out_file.write(k.encode(ENCODE_UTF8))
                                 out_file.write("{}{}\n".format(SEP, v))
 
-    def output(self):
-        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+'''
+INPUT
+============================================
+{"creation_datetime": "2016-06", "n_count": 2541630.75, "url_type": "logic1", "url_end": "logic1_\u4fe1\u7528\u5361", "percentage": 0.5983244364174981, "date_type": "month", "chain_length": 4, "url_start": "logic1_\u4fe1\u7528\u5361"}
+
+
+OUTPUT
+============================================
+{
+  "nodes":[
+    {"name":"Myriel","group":1},
+    {"name":"Napoleon","group":1},
+    {"name":"Mlle.Baptistine","group":1},
+    {"name":"Mme.Magloire","group":1},
+    {"name":"CountessdeLo","group":1},
+    {"name":"Geborand","group":1},
+    {"name":"Champtercier","group":1},
+    {"name":"Cravatte","group":1},
+    {"name":"Count","group":1},
+    {"name":"OldMan","group":1}
+  ],
+  "links":[
+    {"source":1,"target":0,"value":1},
+    {"source":2,"target":0,"value":2},
+    {"source":3,"target":0,"value":3},
+    {"source":4,"target":0,"value":4},
+    {"source":5,"target":0,"value":5},
+    {"source":6,"target":0,"value":6},
+    {"source":7,"target":0,"value":7},
+    {"source":8,"target":0,"value":8},
+    {"source":9,"target":0,"value":9}
+  ]
+}
+'''
+class VizCorrelationTask(luigi.Task):
+    def run(self):
+        global ENCODE_UTF8
+
+        results = {"nodes": [], "links": []}
+        with self.output().open("wb") as out_file:
+            with gzip.open(self.ifile, "rb") as in_file:
+                is_header = True
+                for line in in_file:
+                    if is_header:
+                        is_header = False
+                    else:
+                        o = json.loads(line.decode(ENCODE_UTF8).strip())
+                        node_start, node_end, percentage = o["url_start"], o["url_end"], o["percentage"]
+                        
