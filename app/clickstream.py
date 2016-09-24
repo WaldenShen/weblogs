@@ -8,7 +8,7 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, CookieHistoryTask, MappingTask, TableauPageTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
@@ -16,10 +16,12 @@ logger = logging.getLogger('luigi-interface')
 logger.setLevel(logging.INFO)
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
+BASEPATH_TEMP = os.path.join(BASEPATH, "data", "temp")
 BASEPATH_DB = os.path.join(BASEPATH, "data", "db")
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
+BASEPATH_TABLEAU = os.path.join(BASEPATH, "data", "tableau")
 
 
 class RawTask(luigi.Task):
@@ -116,7 +118,7 @@ class AdvancedTask(luigi.Task):
         global BASEPATH_RAW, BASEPATH_ADV
 
         if self.mode.lower() == "single":
-            for node_type in ["logic1", "logic2", "function", "intention"]:
+            for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic_intention"]:
                 ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
                 yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, ntype=node_type, **self.adv_corr)
 
@@ -136,6 +138,19 @@ class AdvancedTask(luigi.Task):
                 ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
                 ofile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
                 yield NALTask(ifile=ifile, ofile=ofile)
+
+                ofile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(str(date)))
+                yield CookieHistoryTask(ifile=ifile, ofile=ofile)
+
+                ofile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
+                yield MappingTask(ifile=ifile, ofile=ofile)
+
+                ifiles = []
+                for hour in range(0, 24):
+                    ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
+
+                ofile = os.path.join(BASEPATH_TABLEAU, "page_{}.tsv.gz".format(str(date)))
+                yield TableauPageTask(ifiles=ifiles, ofile=ofile)
 
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:
@@ -193,6 +208,18 @@ class RDBTask(luigi.Task):
                 ifile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
                 ofile = os.path.join(BASEPATH_DB, "nal_{}.tsv.gz".format(str(date)))
                 table = "stats_nal"
+
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+                ifile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_DB, "cookiehistory_{}.tsv.gz".format(str(date)))
+                table = "history_cookie"
+
+                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
+
+                ifile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_DB, "mapping_{}.tsv.gz".format(str(date)))
+                table = "mapping_id"
 
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 

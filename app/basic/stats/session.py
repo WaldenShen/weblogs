@@ -44,7 +44,7 @@ def luigi_run(filepath, filter_app=False, results={}):
                 if filter_app and is_app_log(url):
                     continue
 
-                for name, value in zip(["logic1", "logic2", "function", "intention"], [logic1, logic2, function , intention]):
+                for name, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function , intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
                     key = name + "_" + value
 
                     init_r = {"category_key": None,
@@ -62,7 +62,7 @@ def luigi_run(filepath, filter_app=False, results={}):
                     pre_total_count = 0
                     piece = {}
 
-                for name, value in zip(["logic1", "logic2", "function", "intention"], [logic1, logic2, function , intention]):
+                for name, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function , intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
                     key = name + "_" + value
 
                     init_r = {"category_key": None,

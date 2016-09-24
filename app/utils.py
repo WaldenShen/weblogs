@@ -58,16 +58,13 @@ DOMAIN_MAP = {"com.cathaybk.koko.ios.app": "KOKO未分類",
               "www.kokobank.com": "KOKO未分類",
               "cathaybk.com.tw": "官網未分類"}
 
-FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else DOMAIN_MAP.get(urlparse(x).netloc, OTHER)
+FUNC = lambda x, y: y + "_" + x if (x and (isinstance(x, str) or isinstance(x, unicode)) and x.lower() != "none") else y + "_" + OTHER
 FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 CATEGORY_URL = None
 
 CONN_LOGIN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
 DB_LOGIN_REDIS = redis.Redis(connection_pool=CONN_LOGIN_REDIS)
-
-CONN_BEHAVIOR_REDIS = redis.ConnectionPool(host='localhost', port=6380, db=0)
-DB_BEHAVIOR_REDIS = redis.Redis(connection_pool=CONN_BEHAVIOR_REDIS)
 
 def load_category(filepath=FILEPATH_CATEGORY):
     results = {}
@@ -120,34 +117,38 @@ def norm_url(url):
 
 def _categorized_url(url, otype="all"):
     global CATEGORY_URL, DOMAIN_MAP, FUNC, OTHER
+    global LOGIC1, LOGIC2, FUNCTION, INTENTION
 
     if CATEGORY_URL is None:
         CATEGORY_URL = load_category()
 
-    n_url = norm_url(url)
+    n_url = norm_url(url.lower())
 
     logic1, logic2, function, intention = None, None, None, None
     if n_url in CATEGORY_URL:
-        logic1, logic2, function, intention = CATEGORY_URL[n_url]["logic1"], CATEGORY_URL[n_url]["logic2"], CATEGORY_URL[n_url]["function"], CATEGORY_URL[n_url]["intention"]
+        logic1, logic2, function, intention = CATEGORY_URL[n_url][LOGIC1], CATEGORY_URL[n_url][LOGIC2], CATEGORY_URL[n_url][FUNCTION], CATEGORY_URL[n_url][INTENTION]
+    else:
+        domain = DOMAIN_MAP.get(urlparse(n_url).netloc, OTHER)
+        logic1, logic2, function, intention = domain, domain, domain, domain
 
     ret = None
     if otype == "all":
-        ret = FUNC(logic1, "logic1"), FUNC(logic2, "logic2"), FUNC(function, "function"), FUNC(intention, "intention")
-    elif otype == "logic1":
-        ret = FUNC(logic1, "logic1")
-    elif otype == "logic2":
-        ret = FUNC(logic2, "logic2")
-    elif otype == "function":
-        ret = FUNC(function, "function")
-    elif otype == "intention":
-        ret = FUNC(intention, "intention")
+        ret = FUNC(logic1, LOGIC1), FUNC(logic2, LOGIC2), FUNC(function, FUNCTION), FUNC(intention, INTENTION)
+    elif otype == LOGIC1:
+        ret = FUNC(logic1, LOGIC1)
+    elif otype == LOGIC2:
+        ret = FUNC(logic2, LOGIC2)
+    elif otype == FUNCTION:
+        ret = FUNC(function, FUNCTION)
+    elif otype == INTENTION:
+        ret = FUNC(intention, INTENTION)
     elif otype == "logic":
-        ret = FUNC(logic1, "logic1") + "_" + FUNC(logic2, "logic2")
+        ret = FUNC(logic1, LOGIC1) + "_" + FUNC(logic2, LOGIC2)
 
     return ret
 
 def _rich_url(logic1, logic2, function, intention):
-    return "_".join([logic1, logic2]), "_".join([logic1, function]), "_".join([logic2, function]), "_".join([logic1, intention]), "_".join([logic2, intention])
+    return logic1 + "_" + logic2 , logic1 + "_" + function, logic2 + "_" + function, logic1 + "_" + intention, logic2 + "_" + intention
 
 def parse_raw_page(line):
     global ENCODE_UTF8, SEP, FUNC_NONE
@@ -231,86 +232,6 @@ def create_cookie_history(filepath):
     print("The size of db is {}".format(len(DB_LOGIN_REDIS.keys())))
     print("The key of last record is {}".format(cookie_id))
 
-def load_behavior(key):
-    global DB_BEHAVIOR_REDIS
-
-    ret = DB_BEHAVIOR_REDIS.get(key)
-    if ret:
-        ret = json.loads(ret)
-
-    return ret
-
-def load_behaviors():
-    global DB_BEHAVIOR_REDIS
-
-    for key in DB_BEHAVIOR_REDIS.keys():
-        yield key, load_behavior(key)
-
-def save_behavior(key, value):
-    global DB_BEHAVIOR_REDIS
-
-    DB_BEHAVIOR_REDIS.set(key, value)
-
-def create_behavior(filepath):
-    global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
-
-    results = {}
-    with gzip.open(filepath, "rb") as in_file:
-        for line in in_file:
-            o = json.loads(line.decode(ENCODE_UTF8))
-            cookie_id, creation_datetime = o["cookie_id"], parse_datetime(o["creation_datetime"])
-            logic1, logic2, function, intention = o[LOGIC1], o[LOGIC2], o[FUNCTION], o[INTENTION]
-
-            history = load_cookie_history(cookie_id)
-            if history:
-                for idx, login_datetime in enumerate([datetime.datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history]):
-                    if creation_datetime == login_datetime:
-                        key = "TIME_{}".format(idx+1)
-
-                        results.setdefault(key, {COUNT: 0, LOGIC1: {}, LOGIC2: {}, FUNCTION: {}, INTENTION: {}})
-
-                        for subkey, values in zip([LOGIC1, LOGIC2, FUNCTION, INTENTION], [logic1, logic2, function, intention]):
-                            tc, total_count = 0, 0
-                            for name, value in values.items():
-                                if UNKNOWN not in name:
-                                    total_count += value
-
-                                tc += value
-
-                            print key, subkey, name, tc, total_count
-
-                            if total_count > 0:
-                                for name, value in values.items():
-                                    name = name.replace(" ", "").replace(u"投資理財", u"理財投資")
-                                    results[key][subkey].setdefault(name, 0)
-                                    results[key][subkey][name] += float(value) / total_count
-
-                        results[key][COUNT] += 1
-
-                        break
-
-            else:
-                print("Not found {} in 'login' database".format(cookie_id))
-
-    print("finish {} with {}".format(filepath, results.keys()))
-
-    for key, values in results.items():
-        ret = load_behavior(key)
-        if ret:
-            for subkey, category in values.items():
-                if isinstance(category, int):
-                    ret[subkey] += category
-                else:
-                    for name, value in category.items():
-                        ret[subkey].setdefault(name, 0)
-                        ret[subkey][name] += value
-
-            print("update {}".format(key))
-            save_behavior(key, json.dumps(ret))
-        else:
-            print("not found {}".format(key))
-            save_behavior(key, json.dumps(values))
-
 def unknown_urls():
     filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-21*.tsv.gz")
 
@@ -339,6 +260,11 @@ def unknown_urls():
             out_file.write(str(count))
             out_file.write("\n")
 
+def norm_str(value):
+    global ENCODE_UTF8
+
+    return re.sub("({}_|{}_|{}_|{}_)".format(LOGIC1, LOGIC2, FUNCTION, INTENTION), "", value).strip("_")
+
 if __name__ == "__main__":
     '''
     # Create the login_datetime database
@@ -350,8 +276,8 @@ if __name__ == "__main__":
             print("current filepath is {}".format(filepath))
     '''
 
-    for filepath in glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz")):
+    out_file = gzip.open("cookie_behavior.gz", "ab")
+    for filepath in sorted(glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz"))):
         print("Start to proceed {}".format(filepath))
-        create_behavior(filepath)
-
-        break
+        create_behavior(filepath, out_file)
+    out_file.close()
