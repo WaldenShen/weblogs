@@ -9,6 +9,7 @@ import luigi
 import sqlite3
 import jaydebeapi as jdbc
 
+from utils import norm_str
 from utils import SEP, ENCODE_UTF8
 
 logger = logging.getLogger('luigi-interface')
@@ -151,7 +152,7 @@ class SqlliteTable(luigi.Task):
 
                     sql = "INSERT INTO {table}({columns}) VALUES ({value})".format(table=self.table, columns=columns, value=",".join(["?" for i in j.keys()]))
 
-                rows.append(tuple(j.values()))
+                rows.append(tuple([norm_str(v) if isinstance(v, str) or isinstance(v, unicode) else v for v in j.values()]))
 
             if rows:
                 cursor.executemany(sql, rows)

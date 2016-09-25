@@ -126,6 +126,7 @@ class ClickstreamFirstRaw(luigi.Task):
 
 class RawPath(luigi.Task):
     task_namespace = "clickstream"
+    prior = luigi.IntParameter(default=10)
 
     columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,duration,active_duration,loading_time,ip")
     ofile = luigi.Parameter()
@@ -134,6 +135,10 @@ class RawPath(luigi.Task):
     hour = luigi.IntParameter(default=-1)
 
     ntype = luigi.Parameter(default="url")
+
+    @property
+    def priority(self):
+        return self.prior
 
     def requires(self):
         global BASEPATH_TEMP
