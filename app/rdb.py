@@ -31,6 +31,18 @@ def get_connection():
 
     return connection
 
+def get_writing_connection():
+    global BASEPATH_DRIVER
+
+    connection = jdbc.connect('com.teradata.jdbc.TeraDriver',
+                              ['jdbc:teradata://88.8.98.214/tmode=ANSI,CLIENT_CHARSET=WINDOWS-950',
+                               'NT48174',
+                               'S914843!'],
+                              ['{}/terajdbc4.jar'.format(BASEPATH_DRIVER),
+                               '{}/tdgssconfig.jar'.format(BASEPATH_DRIVER)])
+
+    return connection
+
 class TeradataInsertTable(luigi.Task):
     task_namespace = "clickstream"
 
@@ -129,6 +141,7 @@ class TeradataTable(luigi.Task):
 class SqlliteTable(luigi.Task):
     task_namespace = "clickstream"
 
+    conn = luigi.Parameter(default="sqlite")
     table = luigi.Parameter(default="stats_page")
     database = luigi.Parameter(default="clickstream.db")
 
@@ -138,7 +151,15 @@ class SqlliteTable(luigi.Task):
     def run(self):
         global BASEPATH_SQLLITE, ENCODE_UTF8
 
-        conn = sqlite3.connect(os.path.join(BASEPATH_SQLLITE, self.database))
+        conn = None
+        table = None
+        if self.conn == "sqlite":
+            conn = sqlite3.connect(os.path.join(BASEPATH_SQLLITE, self.database))
+            table = self.table
+        else:
+            conn = get_writing_connection()
+            table = "BACC_TEMP.{}".format(self.table)
+
         cursor = conn.cursor()
 
         sql = None
@@ -150,7 +171,7 @@ class SqlliteTable(luigi.Task):
                 if sql is None:
                     columns = ",".join(j.keys())
 
-                    sql = "INSERT INTO {table}({columns}) VALUES ({value})".format(table=self.table, columns=columns, value=",".join(["?" for i in j.keys()]))
+                    sql = "INSERT INTO {table}({columns}) VALUES ({value})".format(table=table, columns=columns, value=",".join(["?" for i in j.keys()]))
 
                 rows.append(tuple([norm_str(v) if isinstance(v, str) or isinstance(v, unicode) else v for v in j.values()]))
 

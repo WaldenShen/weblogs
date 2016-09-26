@@ -27,7 +27,10 @@ LOGIC1 = "logic1"
 LOGIC2 = "logic2"
 INTENTION = "intention"
 
+INTERVAL = "interval"
+
 UNKNOWN = u"未分類"
+ALL_CATEGORIES = [LOGIC1, LOGIC2, FUNCTION, INTENTION, "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"]
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
@@ -65,6 +68,9 @@ CATEGORY_URL = None
 
 CONN_LOGIN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
 DB_LOGIN_REDIS = redis.Redis(connection_pool=CONN_LOGIN_REDIS)
+
+CONN_INTERVAL_REDIS = redis.ConnectionPool(host="localhost", port=6379, db=1)
+DB_INTERVAL_REDIS = redis.Redis(connection_pool=CONN_INTERVAL_REDIS)
 
 def load_category(filepath=FILEPATH_CATEGORY):
     results = {}
@@ -241,6 +247,35 @@ def create_cookie_history(filepath):
 
     print("The size of db is {}".format(len(DB_LOGIN_REDIS.keys())))
     print("The key of last record is {}".format(cookie_id))
+
+def load_behavior(cookie_id):
+    global DB_INTERVAL_REDIS
+
+    ret = DB_INTERVAL_REDIS.get(cookie_id)
+    if ret:
+        return json.loads(ret)
+    else:
+        return None
+
+def save_behavior(cookie_id, record):
+    global DB_INTERVAL_REDIS, INTERVAL
+
+    ret = load_behavior(cookie_id)
+    if ret:
+        prev_interval = record[INTERVAL]
+        for category_type, info in record.items():
+            if category_type == INTERVAL:
+                ret[INTERVAL][0] += prev_interval[0]
+                ret[INTERVAL][1] += prev_interval[1]
+            else:
+                for category_key, category_value in info.items():
+                    ret.setdefault(category_type,{}).setdefault(category_key, 0)
+                    ret[category_type][category_key] += category_value
+
+        DB_INTERVAL_REDIS.set(cookie_id, json.dumps(ret))
+        print "update ", cookie_id, " record"
+    else:
+        DB_INTERVAL_REDIS.set(cookie_id, json.dumps(record))
 
 def unknown_urls():
     filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-21*.tsv.gz")

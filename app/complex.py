@@ -12,13 +12,18 @@ from datetime import datetime
 
 from saisyo import RawPath
 from advanced.page import suffix_tree
-from utils import get_date_type, parse_datetime, load_cookie_history, save_cookie_history, parse_raw_page, is_app_log, norm_str
-from utils import SEP, NEXT, ENCODE_UTF8, FUNCTION, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
+
+from utils import get_date_type, parse_datetime, parse_raw_page, is_app_log, norm_str
+from utils import load_behavior, save_behavior, load_cookie_history, save_cookie_history
+
+from utils import SEP, NEXT, ENCODE_UTF8, UNKNOWN, INTERVAL
+from utils import ALL_CATEGORIES, LOGIC1, LOGIC2, FUNCTION, INTENTION
 
 logger = logging.getLogger('luigi-interface')
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
+BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
 
 
 class CommonPathTask(luigi.Task):
@@ -208,7 +213,7 @@ class CookieHistoryTask(luigi.Task):
     ofile = luigi.Parameter()
 
     def run(self):
-        global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
+        global ENCODE_UTF8, UNKNOWN, ALL_CATEGORIES
 
         with self.output().open("wb") as out_file:
             with gzip.open(self.ifile, "rb") as in_file:
@@ -216,8 +221,6 @@ class CookieHistoryTask(luigi.Task):
                     o = json.loads(line.decode(ENCODE_UTF8))
                     profile_id, cookie_id, creation_datetime = o["individual_id"], o["cookie_id"], parse_datetime(o["creation_datetime"])
                     creation_datetime = creation_datetime.replace(microsecond=0)
-
-                    logic1, logic2, function, intention = o[LOGIC1], o[LOGIC2], o[FUNCTION], o[INTENTION]
 
                     history = load_cookie_history(cookie_id)
                     if history:
@@ -233,7 +236,9 @@ class CookieHistoryTask(luigi.Task):
                             if creation_datetime == login_datetime:
                                 key = "TIME_{}".format(idx+1)
 
-                                for subkey, values in zip([LOGIC1, LOGIC2, FUNCTION, INTENTION], [logic1, logic2, function, intention]):
+                                for subkey in ALL_CATEGORIES:
+                                    values = o[subkey]
+
                                     tc, total_count = 0, 0
                                     for name, value in values.items():
                                         if UNKNOWN not in name and name.find(u"其他") == -1:
@@ -262,6 +267,50 @@ class CookieHistoryTask(luigi.Task):
                             pre_datetime = login_datetime
                     else:
                         logger.warn("Not found {} in 'login' database in {}".format(cookie_id, self.ifile))
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class IntervalTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+
+    def requires(self):
+        global BASEPATH_STATS
+        creation_datetime, _ = get_date_type(self.ofile)
+        ofile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(creation_datetime))
+
+        yield CookieHistoryTask(ifile=self.ifile, ofile=ofile)
+
+    def run(self):
+        global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, ALL_CATEGORIES, INTERVAL
+
+        results = {}
+        for input in self.input():
+            with input.open("rb") as in_file:
+                for line in in_file:
+                    o = json.loads(line.decode(ENCODE_UTF8).strip())
+
+                    cookie_id, total_count2 = o["cookie_id"], o["total_count2"]
+                    category_type, category_key, category_value = o["category_type"], o["category_key"], o["category_value"]
+                    prev_interval = o["prev_interval"]
+
+                    if total_count2 > 0 and prev_interval > 0:
+                        results.setdefault(cookie_id, {}).setdefault(category_type, {}).setdefault(category_key, category_value)
+                        results[cookie_id][INTERVAL] = [0, 0]
+                        results[cookie_id][INTERVAL][0] += prev_interval
+                        results[cookie_id][INTERVAL][1] += 1
+
+                        #logger.info((cookie_id, category_type, category_key, category_value, results[cookie_id][category_type][category_key], results[cookie_id][INTERVAL]))
+
+        with self.output().open("wb") as out_file:
+            for cookie_id, record in results.items():
+                save_behavior(cookie_id, record)
+
+                record["cookie_id"] = cookie_id
+                out_file.write("{}\n".format(json.dumps(record)))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
