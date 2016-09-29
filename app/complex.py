@@ -8,13 +8,13 @@ import json
 import redis
 import luigi
 import logging
-from datetime import datetime
 
+from datetime import datetime
 from saisyo import RawPath
 from advanced.page import suffix_tree
 
-from utils import get_date_type, parse_datetime, parse_raw_page, is_app_log, norm_str
-from utils import load_behavior, save_behavior, load_cookie_history, save_cookie_history
+from utils import get_date_type, parse_datetime, parse_raw_page, is_app_log, norm_str, norm_category, is_uncategorized_key
+from behavior import save_cookie_interval, load_cookie_history, save_cookie_history
 
 from utils import SEP, NEXT, ENCODE_UTF8, UNKNOWN, INTERVAL
 from utils import ALL_CATEGORIES, LOGIC1, LOGIC2, FUNCTION, INTENTION
@@ -224,11 +224,8 @@ class CookieHistoryTask(luigi.Task):
 
                     history = load_cookie_history(cookie_id)
                     if history:
-                        first_datetime, pre_datetime = None, None
+                        pre_datetime = None
                         for idx, login_datetime in enumerate([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history]):
-                            if first_datetime is None:
-                                first_datetime = login_datetime
-
                             diff_seconds = 0
                             if pre_datetime is not None:
                                 diff_seconds = (login_datetime - pre_datetime).total_seconds()
@@ -239,29 +236,24 @@ class CookieHistoryTask(luigi.Task):
                                 for subkey in ALL_CATEGORIES:
                                     values = o[subkey]
 
-                                    tc, total_count = 0, 0
-                                    for name, value in values.items():
-                                        if UNKNOWN not in name and name.find(u"其他") == -1:
-                                            total_count += value
+                                    total_count = sum([0 if is_uncategorized_key(k) else v for k, v in values.items()])
 
-                                        tc += value
+                                    if total_count > 0:
+                                        for name, value in values.items():
+                                            if not is_uncategorized_key(name):
+                                                name = norm_category(name)
 
-                                    for name, value in values.items():
-                                        name = name.replace(" ", "").replace(u"投資理財", u"理財投資")
+                                                results = {"individual_id": profile_id,
+                                                           "cookie_id": cookie_id,
+                                                           "category_type": subkey,
+                                                           "times": idx+1,
+                                                           "creation_datetime": login_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+                                                           "prev_interval": diff_seconds,
+                                                           "category_key": norm_str(name),
+                                                           "category_value": value,
+                                                           "total_count": total_count}
 
-                                        results = {"individual_id": profile_id,
-                                                   "cookie_id": cookie_id,
-                                                   "category_type": subkey,
-                                                   "times": idx+1,
-                                                   "creation_datetime": login_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-                                                   "first_interval": (login_datetime-first_datetime).total_seconds(),
-                                                   "prev_interval": diff_seconds,
-                                                   "category_key": norm_str(name),
-                                                   "category_value": value,
-                                                   "total_count1": tc,
-                                                   "total_count2": total_count}
-
-                                        out_file.write("{}\n".format(json.dumps(results)))
+                                                out_file.write("{}\n".format(json.dumps(results)))
                                 break
 
                             pre_datetime = login_datetime
@@ -279,8 +271,10 @@ class IntervalTask(luigi.Task):
 
     def requires(self):
         global BASEPATH_STATS
-        creation_datetime, _ = get_date_type(self.ofile)
+        creation_datetime, _ = get_date_type(self.ifile)
         ofile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(creation_datetime))
+
+        logger.info((self.ifile, ofile))
 
         yield CookieHistoryTask(ifile=self.ifile, ofile=ofile)
 
@@ -293,7 +287,7 @@ class IntervalTask(luigi.Task):
                 for line in in_file:
                     o = json.loads(line.decode(ENCODE_UTF8).strip())
 
-                    cookie_id, total_count2 = o["cookie_id"], o["total_count2"]
+                    cookie_id, total_count2 = o["cookie_id"], o["total_count"]
                     category_type, category_key, category_value = o["category_type"], o["category_key"], o["category_value"]
                     prev_interval = o["prev_interval"]
 
@@ -303,11 +297,9 @@ class IntervalTask(luigi.Task):
                         results[cookie_id][INTERVAL][0] += prev_interval
                         results[cookie_id][INTERVAL][1] += 1
 
-                        #logger.info((cookie_id, category_type, category_key, category_value, results[cookie_id][category_type][category_key], results[cookie_id][INTERVAL]))
-
         with self.output().open("wb") as out_file:
             for cookie_id, record in results.items():
-                save_behavior(cookie_id, record)
+                save_cookie_interval(cookie_id, record)
 
                 record["cookie_id"] = cookie_id
                 out_file.write("{}\n".format(json.dumps(record)))

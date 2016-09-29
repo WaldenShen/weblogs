@@ -126,10 +126,10 @@ var options = {
 '2016-09-20': [60248,2472,1317,0,0,0,0,0,0,0,0,0,56459],
 '2016-09-21': [53548,0,0,0,0,0,0,0,0,0,0,0,53548],
               },
-        startDate : "",
-        endDate : "",
-        dateFormat : "",
-        title : "Retention Analysis"};
+        startDate : "2016-06-01",
+        endDate : "2016-09-21",
+        dateFormat : "YYYY-MM-DD",
+        title : "回訪率分析"};
 
 $.fn.Retention = function (options) {
     var graphTitle = options.title || "Retention Graph";
@@ -178,7 +178,7 @@ $.fn.Retention = function (options) {
     var table = body.append("table")
         .attr("class", "table table-bordered text-center");
 
-    var headData = ["Date \\ Days", "day0", "day1", "day2", "day3", "day4", "day5", "day6", "day7", "week2", "week3", "month1", "month2", "loss"];
+    var headData = ["Date \\ Days", "新訪客人數", "day1", "day2", "day3", "day4", "day5", "day6", "day7", "week2", "week3", "month1", "month2", "流失率"];
 
     var tHead = table.append("thead")
         .append("tr")

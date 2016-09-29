@@ -17,7 +17,6 @@ except ImportError:
     from urllib.parse import urlparse
 
 SEP = "\t"
-OTHER = "其他"
 NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
@@ -30,6 +29,9 @@ INTENTION = "intention"
 INTERVAL = "interval"
 
 UNKNOWN = u"未分類"
+HOMEPAGE = u"首頁"
+OTHER = "其他"
+
 ALL_CATEGORIES = [LOGIC1, LOGIC2, FUNCTION, INTENTION, "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"]
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
@@ -66,11 +68,6 @@ FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 CATEGORY_URL = None
 
-CONN_LOGIN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
-DB_LOGIN_REDIS = redis.Redis(connection_pool=CONN_LOGIN_REDIS)
-
-CONN_INTERVAL_REDIS = redis.ConnectionPool(host="localhost", port=6379, db=1)
-DB_INTERVAL_REDIS = redis.Redis(connection_pool=CONN_INTERVAL_REDIS)
 
 def load_category(filepath=FILEPATH_CATEGORY):
     results = {}
@@ -117,9 +114,21 @@ def load_category(filepath=FILEPATH_CATEGORY):
 def is_app_log(log):
     return log.startswith("app://")
 
+def is_uncategorized_key(s):
+    global UNKNOWN, HOMEPAGE, OTHER
+
+    is_uncategorized = False
+    if s.find(UNKNOWN) > -1 or s.find(HOMEPAGE) > -1 or s.find(unicode(OTHER, ENCODE_UTF8)) > -1:
+        is_uncategorized = True
+
+    return is_uncategorized
+
 def norm_url(url):
     start_idx = url.find("?")
     return url[:start_idx if start_idx > -1 else len(url)].replace("http://", "https://")
+
+def norm_category(name):
+    return name.replace(" ", "").replace(u"投資理財", u"理財投資")
 
 def _categorized_url(url, otype="all"):
     global CATEGORY_URL, DOMAIN_MAP, FUNC, OTHER
@@ -209,77 +218,7 @@ def parse_datetime(creation_datetime):
 
     return creation_datetime
 
-def load_history():
-    global DB_LOGIN_REDIS
-
-    for cookie_id in DB_LOGIN_REDIS.keys():
-        yield cookie_id, json.loads(DB_LOGIN_REDIS.get(cookie_id))
-
-def load_cookie_history(cookie_id):
-    global DB_LOGIN_REDIS
-
-    ret = DB_LOGIN_REDIS.get(cookie_id)
-    if ret:
-        return json.loads(ret)
-    else:
-        return None
-
-def save_cookie_history(cookie_id, creation_datetime):
-    global DB_LOGIN_REDIS
-
-    DB_LOGIN_REDIS.set(cookie_id, json.dumps([creation_datetime.strftime("%Y-%m-%d %H:%M:%S")]))
-
-def create_cookie_history(filepath):
-    global ENCODE_UTF8, CONN_LOGIN_REDIS, DB_LOGIN_REDIS
-
-    with gzip.open(filepath, "rb") as in_file:
-        for line in in_file:
-            o = json.loads(line.decode(ENCODE_UTF8))
-            cookie_id, creation_datetime = o["cookie_id"], parse_datetime(o["creation_datetime"])
-
-            history = []
-            ret = DB_LOGIN_REDIS.get(cookie_id)
-            if ret:
-                history = json.loads(ret)
-            history.append(creation_datetime.strftime("%Y-%m-%d %H:%M:%S"))
-
-            DB_LOGIN_REDIS.set(cookie_id, json.dumps(history))
-
-    print("The size of db is {}".format(len(DB_LOGIN_REDIS.keys())))
-    print("The key of last record is {}".format(cookie_id))
-
-def load_behavior(cookie_id):
-    global DB_INTERVAL_REDIS
-
-    ret = DB_INTERVAL_REDIS.get(cookie_id)
-    if ret:
-        return json.loads(ret)
-    else:
-        return None
-
-def save_behavior(cookie_id, record):
-    global DB_INTERVAL_REDIS, INTERVAL
-
-    ret = load_behavior(cookie_id)
-    if ret:
-        prev_interval = record[INTERVAL]
-        for category_type, info in record.items():
-            if category_type == INTERVAL:
-                ret[INTERVAL][0] += prev_interval[0]
-                ret[INTERVAL][1] += prev_interval[1]
-            else:
-                for category_key, category_value in info.items():
-                    ret.setdefault(category_type,{}).setdefault(category_key, 0)
-                    ret[category_type][category_key] += category_value
-
-        DB_INTERVAL_REDIS.set(cookie_id, json.dumps(ret))
-        print "update ", cookie_id, " record"
-    else:
-        DB_INTERVAL_REDIS.set(cookie_id, json.dumps(record))
-
-def unknown_urls():
-    filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-21*.tsv.gz")
-
+def unknown_urls(file_raw_page=os.path.join(BASEPATH, "data", "temp", "page_2016-09-21*.tsv.gz")):
     urls = {}
     for filepath in sorted(glob.glob(filepath_raw_page)):
         if len(os.path.basename(filepath)) > 20:
@@ -295,8 +234,6 @@ def unknown_urls():
                         if not is_app_log(url) and OTHER in logic1:
                             urls.setdefault(norm_url(url), 0)
                             urls[norm_url(url)] += 1
-
-        print(filepath)
 
     with open("unknown_url.txt", "wb") as out_file:
         for url, count in urls.items():

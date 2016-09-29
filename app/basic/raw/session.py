@@ -46,7 +46,7 @@ def set_record(results, session_id, cookie_id, individual_id, creation_datetime,
               "logic2": {},
               "function": {},
               "intention": {},
-              "logic": {}.
+              "logic": {},
               "logic1_function": {},
               "logic2_function": {},
               "logic1_intention": {},

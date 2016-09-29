@@ -5,7 +5,7 @@ import gzip
 import json
 
 from utils import is_app_log, parse_raw_page
-from utils import ENCODE_UTF8
+from utils import ENCODE_UTF8, ALL_CATEGORIES
 
 '''
 INPUT
@@ -44,8 +44,8 @@ def luigi_run(filepath, filter_app=False, results={}):
 
                 results.setdefault(cookie_id, {})
 
-                for name, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
-                    key = name + "_" + value
+                for name, value in zip(ALL_CATEGORIES, [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
+                    key = name + "#" + value
                     results[cookie_id].setdefault(key, 0)
                     results[cookie_id][key] += 1
 
@@ -59,13 +59,13 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
 
         for key, value in info.items():
             r.setdefault(key, {})
-            category_key, category_value = key.split("_", 1)
+            category_key, category_value = key.split("#")
 
             r[key]["category_key"] = category_key
             r[key]["category_value"] = category_value
             r[key].setdefault("n_count", 0)
 
-            if key.find("logic1") > -1:
+            if category_key == "logic1":
                 total_count += value
 
         for key, value in info.items():

@@ -7,10 +7,11 @@ import logging
 
 import luigi
 import sqlite3
+import MySQLdb
 import jaydebeapi as jdbc
 
 from utils import norm_str
-from utils import SEP, ENCODE_UTF8
+from utils import SEP, ENCODE_UTF8, FUNCTION
 
 logger = logging.getLogger('luigi-interface')
 
@@ -30,6 +31,10 @@ def get_connection():
                                '{}/tdgssconfig.jar'.format(BASEPATH_DRIVER)])
 
     return connection
+
+def get_mysql_connection():
+    conn = MySQLdb.connect("localhost","root", "", "clickstream",charset='utf8')
+    return conn
 
 def get_writing_connection():
     global BASEPATH_DRIVER
@@ -141,7 +146,7 @@ class TeradataTable(luigi.Task):
 class SqlliteTable(luigi.Task):
     task_namespace = "clickstream"
 
-    conn = luigi.Parameter(default="sqlite")
+    conn = luigi.Parameter(default="mysql")
     table = luigi.Parameter(default="stats_page")
     database = luigi.Parameter(default="clickstream.db")
 
@@ -153,7 +158,10 @@ class SqlliteTable(luigi.Task):
 
         conn = None
         table = None
-        if self.conn == "sqlite":
+        if self.conn == "mysql":
+            conn = get_mysql_connection()
+            table = self.table
+        elif self.conn == "sqlite":
             conn = sqlite3.connect(os.path.join(BASEPATH_SQLLITE, self.database))
             table = self.table
         else:
@@ -163,6 +171,7 @@ class SqlliteTable(luigi.Task):
         cursor = conn.cursor()
 
         sql = None
+        total_count = 0
         with gzip.open(self.ifile, "rb") as in_file:
             rows = []
             for line in in_file:
@@ -171,18 +180,46 @@ class SqlliteTable(luigi.Task):
                 if sql is None:
                     columns = ",".join(j.keys())
 
-                    sql = "INSERT INTO {table}({columns}) VALUES ({value})".format(table=table, columns=columns, value=",".join(["?" for i in j.keys()]))
+                    sql = "INSERT INTO {table}({columns}) VALUES ({value})".format(table=table, columns=columns, value=",".join(["%s" for i in j.keys()]))
 
-                rows.append(tuple([norm_str(v) if isinstance(v, str) or isinstance(v, unicode) else v for v in j.values()]))
+                if table == "history_cookie":
+                    if j["category_type"].find(FUNCTION) == -1:
+                        j["category_key"] = norm_str(j["category_key"])
+                    else:
+                        continue
+                elif table in ["stats_session", "stats_cookie"]:
+                    if j["category_key"].find(FUNCTION) == -1:
+                        j["category_value"] = norm_str(j["category_value"])
+                    else:
+                        continue
+                elif table == "stats_page":
+                    if j["url_type"].find(FUNCTION) == -1:
+                        j["url"] = norm_str(j["url"])
+                    else:
+                        continue
+                elif table == "adv_pagecorr":
+                    if j["url_type"].find(FUNCTION) == -1:
+                        j["url_start"] = norm_str(j["url_start"])
+                        j["url_end"] = norm_str(j["url_end"])
+                    else:
+                        continue
+
+                rows.append(tuple([v for v in j.values()]))
+                if len(rows) > 1000:
+                    cursor.executemany(sql, rows)
+
+                    total_count += len(rows)
+                    rows = []
 
             if rows:
                 cursor.executemany(sql, rows)
+                total_count += len(rows)
 
         with self.output().open("wb") as out_file:
             try:
-                out_file.write(bytes("{} - {}\n".format(len(rows), sql), ENCODE_UTF8))
+                out_file.write(bytes("{} - {}\n".format(total_count, sql), ENCODE_UTF8))
             except:
-                out_file.write("{} - {}\n".format(len(rows), sql))
+                out_file.write("{} - {}\n".format(total_count, sql))
 
         conn.commit()
         conn.close()
