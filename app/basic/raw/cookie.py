@@ -5,7 +5,7 @@ import gzip
 import json
 
 from utils import parse_raw_page, is_app_log
-from utils import ENCODE_UTF8
+from utils import ENCODE_UTF8, ALL_CATEGORIES
 
 '''
 INPUT
@@ -61,7 +61,7 @@ def set_record(results, creation_datetime, cookie_id, individual_id, logic1, log
     results[cookie_id]["active_duration"] += active_duration
     results[cookie_id]["loading_duration"] += loading_duration
 
-    for key, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
+    for key, value in zip(ALL_CATEGORIES, [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
         results[cookie_id][key].setdefault(value, 0)
         results[cookie_id][key][value] += 1
 
