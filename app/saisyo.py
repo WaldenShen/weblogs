@@ -111,11 +111,17 @@ class ClickstreamFirstRaw(luigi.Task):
                 logger.warn(e)
 
         with self.output().open('wb') as out_file:
-            out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
+            try:
+                out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
+            except:
+                out_file.write("{}\n".format(SEP.join(self.columns.split(","))))
 
             for session_id, info in results.items():
                 for row in info:
-                    out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
+                    try:
+                        out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
+                    except:
+                        out_file.write(("{}\n".format(SEP.join(r.decode(ENCODE_UTF8) if (isinstance(r, str) or isinstance(r, unicode)) else str(r) for r in [session_id] + row))))
 
         # close connection
         connection.close()
