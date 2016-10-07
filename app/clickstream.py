@@ -8,7 +8,7 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, TableauPageTask, CookieHistoryTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, TableauPageTask, CookieHistoryTask, CommunityDetectionTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
@@ -128,6 +128,8 @@ class AdvancedTask(luigi.Task):
                 ofile_common_path = os.path.join(BASEPATH_ADV, "{}commonpath_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
                 yield CommonPathTask(ntype=node_type, interval=self.interval, ofile=ofile_common_path)
         elif self.mode.lower() == "range":
+            ifiles_community_detection = []
+
             for date in self.interval:
                 interval = d.Date.parse(str(date))
 
@@ -153,6 +155,7 @@ class AdvancedTask(luigi.Task):
                 ifiles = []
                 for hour in range(0, 24):
                     ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
+                    ifiles_community_detection.append(ifiles[-1])
 
                 ofile = os.path.join(BASEPATH_TABLEAU, "page_{}.tsv.gz".format(str(date)))
                 yield TableauPageTask(ifiles=ifiles, ofile=ofile)
@@ -167,6 +170,10 @@ class AdvancedTask(luigi.Task):
                         ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}{:02d}.tsv.gz".format(node_type, str(date), hour))
                         yield PageCorrTask(ofile=ofile_page_corr, interval=interval, hour=hour, ntype=node_type, **self.adv_corr)
                 '''
+
+            for node in ["logic1", "logic", "intention", "function", "logic1_intention"]:
+                ofile = "../data/cluster/{}_2016-09.dot".format(node)
+                yield CommunityDetectionTask(ifiles=ifiles_community_detection, ofile=ofile, node=node)
         else:
             raise NotImplementedError
 

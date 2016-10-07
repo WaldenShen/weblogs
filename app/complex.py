@@ -9,6 +9,10 @@ import redis
 import luigi
 import logging
 
+import networkx as nx
+import pygraphviz
+from networkx.drawing.nx_agraph import write_dot
+
 from datetime import datetime
 from saisyo import RawPath
 from advanced.page import suffix_tree
@@ -326,3 +330,73 @@ class MappingTask(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class CommunityDetectionTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifiles = luigi.ListParameter()
+    ofile = luigi.Parameter()
+
+    node = luigi.Parameter()
+
+    def add_edge(self,g, nodes, durations):
+        for i, node_start in enumerate(nodes):
+           for ii, node_end in enumerate(nodes[i+1:]):
+               if node_start != node_end:
+                   weight = 0.5 + min(0.5, 0.5*(float(durations[i+ii])/1000/60/2.5))
+
+                   if g.has_edge(node_start, node_end):
+                       g[node_start][node_end]["weight"] += weight
+                   else:
+                       g.add_weighted_edges_from([(node_start, node_end, weight)])
+
+    def run(self):
+        global ENCODE_UTF8
+
+        g = nx.Graph()
+        for filepath in self.ifiles:
+            with gzip.open(filepath, "rb") as in_file:
+                is_header = True
+
+                nodes = []
+                durations = []
+                pre_session_id, pre_logic = None, None
+                for line in in_file:
+                    if is_header:
+                        is_header = False
+                    else:
+                        session_id, cookie_id, individual_id, url, creation_datetime,\
+                        logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                        duration, active_duration, loading_duration = parse_raw_page(line)
+
+                        if pre_session_id is not None and pre_session_id != session_id:
+                            self.add_edge(g, nodes, durations)
+
+                            nodes = []
+                            durations = []
+
+                        key = None
+                        if self.node == "logic1":
+                            key = logic1
+                        elif self.node == "logic":
+                            key = logic
+                        elif self.node == "intention":
+                            key = intention
+                        elif self.node == "function":
+                            key = function
+                        elif self.node == "logic1_intention":
+                            key = logic1_intention
+
+                        if not is_uncategorized_key(key.decode(ENCODE_UTF8)):
+                            nodes.append(norm_str(key).replace('"', "").decode(ENCODE_UTF8))
+                            durations.append(active_duration)
+
+                        pre_session_id, pre_logic = session_id, key
+
+            self.add_edge(g, nodes, durations)
+            logger.info("Finish {} with {}, and the size of graph is ({}, {})".format(filepath, self.node, g.number_of_nodes(), g.number_of_edges()))
+
+        write_dot(g, self.output().fn)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
