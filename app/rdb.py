@@ -129,7 +129,7 @@ class TeradataTable(luigi.Task):
                            try:
                                 out_file.write(bytes("{}\n".format(SEP.join([str(r) for r in row])), ENCODE_UTF8))
                            except:
-                                out_file.write("{}\n".format(SEP.join([str(r) for r in row])))
+                                out_file.write("{}\n".format(SEP.join([r.encode(ENCODE_UTF8) if (isinstance(r, str) or isinstance(r, unicode)) else str(r) for r in row])))
                     else:
                         break
             except jdbc.Error as e:
