@@ -66,14 +66,17 @@ def luigi_run(filepath, filter_app=False, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, url, creation_datetime,\
-                logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-                duration, active_duration, loading_duration = parse_raw_page(line)
+                info = parse_raw_page(line)
 
-                if filter_app and is_app_log(url):
-                    continue
+                if info:
+                    session_id, cookie_id, individual_id, url, creation_datetime,\
+                    logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                    duration, active_duration, loading_duration = parse_raw_page(line)
 
-                set_record(results, cookie_id, individual_id, norm_url(url), logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention, duration, active_duration, loading_duration)
+                    if filter_app and is_app_log(url):
+                        continue
+
+                    set_record(results, cookie_id, individual_id, norm_url(url), logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention, duration, active_duration, loading_duration)
 
     return results
 

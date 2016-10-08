@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import sys
 import glob
 import luigi
 import logging
@@ -8,7 +9,7 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, TableauPageTask, CookieHistoryTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, CookieHistoryTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
@@ -104,6 +105,21 @@ class RawTask(luigi.Task):
         else:
             raise NotImplementedError
 
+class SequenceTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        global BASEPATH_RAW, BASEPATH_ADV
+
+        for prior, date in enumerate(self.interval):
+            interval = d.Date.parse(str(date))
+
+            ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
+            ofile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
+            yield NALTask(prior=sys.maxint-prior, ifile=ifile, ofile=ofile)
+
 class AdvancedTask(luigi.Task):
     task_namespace = "clickstream"
 
@@ -138,8 +154,6 @@ class AdvancedTask(luigi.Task):
                     yield RetentionTask(date=(self.interval.date_b-datetime.timedelta(days=self.trackday)), ofile=ofile_retention_path, **self.adv_retention)
 
                 ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
-                ofile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
-                yield NALTask(ifile=ifile, ofile=ofile)
 
                 ofile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(str(date)))
                 yield CookieHistoryTask(ifile=ifile, ofile=ofile)
@@ -153,9 +167,6 @@ class AdvancedTask(luigi.Task):
                 ifiles = []
                 for hour in range(0, 24):
                     ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
-
-                ofile = os.path.join(BASEPATH_TABLEAU, "page_{}.tsv.gz".format(str(date)))
-                yield TableauPageTask(ifiles=ifiles, ofile=ofile)
 
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:

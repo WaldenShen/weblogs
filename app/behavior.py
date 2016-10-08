@@ -7,8 +7,8 @@ import gzip
 import json
 import datetime
 
+from utils import parse_datetime
 from utils import ENCODE_UTF8, INTERVAL
-
 
 CONN_LOGIN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
 DB_LOGIN_REDIS = redis.Redis(connection_pool=CONN_LOGIN_REDIS)
@@ -74,7 +74,7 @@ def load_cookie_interval(cookie_id):
 def save_cookie_interval(cookie_id, record):
     global DB_INTERVAL_REDIS, INTERVAL
 
-    ret = load_cookie_behavior(cookie_id)
+    ret = load_cookie_interval(cookie_id)
     if ret:
         prev_interval = record[INTERVAL]
         for category_type, info in record.items():
@@ -89,3 +89,15 @@ def save_cookie_interval(cookie_id, record):
         DB_INTERVAL_REDIS.set(cookie_id, json.dumps(ret))
     else:
         DB_INTERVAL_REDIS.set(cookie_id, json.dumps(record))
+
+if __name__ == "__main__":
+    # Create the login_datetime database
+    '''
+    filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
+    for filepath in sorted(glob.glob(filepath_raw_cookie)):
+        if len(os.path.basename(filepath)) > 22:
+            create_cookie_history(filepath)
+            print("current filepath is {}".format(filepath))
+    '''
+    for k, v in load_interval():
+        print k, v

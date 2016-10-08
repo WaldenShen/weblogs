@@ -8,8 +8,8 @@ import json
 import redis
 import datetime
 
-from utils import SEP, ENCODE_UTF8
-from utils import load_history
+from utils import SEP, ENCODE_UTF8, get_date_type
+from behavior import load_history
 
 '''
 INPUT (schema JSON format)
@@ -56,8 +56,6 @@ def luigi_run(date_start, results={}):
                 results.setdefault(cookie_id, [first_login, second_login])
             else:
                 results.setdefault(cookie_id, [first_login])
-
-    print date_start, len(results)
 
     return results
 
@@ -115,11 +113,11 @@ if __name__ == "__main__":
     import glob
 
     df = {}
-    for fn in sorted(glob.glob("../data/raw/cookie_2016-08-0*.tsv.gz")):
-        if fn.find("01") > -1 or fn.find("02") > -1 or fn.find("03") > -1 or fn.find("04") > -1:
-            df = luigi_run(fn, df)
+    for fn in sorted(glob.glob("../data/raw/cookie_2016-08-01*.tsv.gz")):
+        dt, _ = get_date_type(fn)
+        df = luigi_run(datetime.datetime.strptime(dt, "%Y-%m-%d"), df)
 
     out_file = gzip.open("tt.tsv.gz", "wb")
-    luigi_dump(out_file, df, "2016-08-03", "day")
+    luigi_dump(out_file, df, "2016-08-01", "day")
     #for cookie_id, dates in df.items():
     #    date_key = dates[0].strftime("%Y-%m-%d")

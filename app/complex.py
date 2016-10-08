@@ -14,7 +14,7 @@ from saisyo import RawPath
 from advanced.page import suffix_tree
 
 from utils import get_date_type, parse_datetime, parse_raw_page, is_app_log, norm_str, norm_category, is_uncategorized_key
-from behavior import save_cookie_interval, load_cookie_history, save_cookie_history
+from behavior import save_cookie_interval, load_cookie_history, save_cookie_history, create_cookie_history
 
 from utils import SEP, NEXT, ENCODE_UTF8, UNKNOWN, INTERVAL
 from utils import ALL_CATEGORIES, LOGIC1, LOGIC2, FUNCTION, INTENTION
@@ -118,15 +118,21 @@ class RetentionTask(luigi.Task):
 
 class NALTask(luigi.Task):
     task_namespace = "clickstream"
+    prior = luigi.IntParameter(default=0)
 
     ifile = luigi.Parameter()
     ofile = luigi.Parameter()
 
+    @property
+    def priority(self):
+        return self.prior
+
     def run(self):
         creation_datetime, date_type = get_date_type(self.output().fn)
 
-        results = {"creation_datetime": creation_datetime, "count_new_pv": 0, "count_old_pv": 0, "count_new_uv": 0, "count_old_uv": 0}
+        create_cookie_history(self.ifile)
 
+        results = {"creation_datetime": creation_datetime, "count_new_pv": 0, "count_old_pv": 0, "count_new_uv": 0, "count_old_uv": 0}
         with gzip.open(self.ifile) as in_file:
             for line in in_file:
                 o = json.loads(line.decode(ENCODE_UTF8).strip())
@@ -149,7 +155,7 @@ class NALTask(luigi.Task):
                         results["count_new_pv"] += sum([c for c in o[FUNCTION].values()])
                         results["count_new_uv"] += 1
                 else:
-                    logger.warn("Not found {}".format(cookie_id))
+                    #logger.warn("Not found {}".format(cookie_id))
 
                     results["count_new_pv"] += sum([c for c in o[FUNCTION].values()])
                     results["count_new_uv"] += 1
@@ -162,55 +168,16 @@ class NALTask(luigi.Task):
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
-class TableauPageTask(luigi.Task):
-    task_namespace = "clickstream"
-
-    ifiles = luigi.ListParameter()
-    ofile = luigi.Parameter()
-
-    def run(self):
-        global ENCODE_UTF8
-
-        with self.output().open("wb") as out_file:
-            out_file.write("{}\n".format(SEP.join(["cookie_id", "individual_id", "creation_datetime", "product1", u"product2", "function", "intention", "product" , "product1_function", "product2_function", "product1_intention", "product2_intention"])))
-
-            for filepath in self.ifiles:
-                with gzip.open(filepath, "rb") as in_file:
-                    is_header = True
-                    for line in in_file:
-                        if is_header:
-                            is_header = False
-                        else:
-                            session_id, cookie_id, individual_id, url, creation_datetime,\
-                            logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-                            duration, active_duration, loading_duration = parse_raw_page(line)
-
-                            if is_app_log(url):
-                                continue
-
-                            terms = [cookie_id, individual_id, creation_datetime, logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]
-                            for idx, term in enumerate(terms):
-                                try:
-                                    out_file.write(norm_str(term))
-                                except UnicodeEncodeError as e:
-                                    out_file.write("UnicodeEncodeError")
-
-                                if idx < len(terms)-1:
-                                    out_file.write(SEP)
-
-                            out_file.write("{}\n".format(SEP.join([str(duration), str(active_duration), str(loading_duration)])))
-
-                logger.info("finish {}".format(filepath))
-
-
-    def output(self):
-        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
-
 class CookieHistoryTask(luigi.Task):
     task_namespace = "clickstream"
+    prior = luigi.IntParameter(default=0)
 
     ifile = luigi.Parameter()
     ofile = luigi.Parameter()
+
+    @property
+    def priority(self):
+        return self.prior
 
     def run(self):
         global ENCODE_UTF8, UNKNOWN, ALL_CATEGORIES
@@ -225,7 +192,7 @@ class CookieHistoryTask(luigi.Task):
                     history = load_cookie_history(cookie_id)
                     if history:
                         pre_datetime = None
-                        for idx, login_datetime in enumerate([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history]):
+                        for idx, login_datetime in enumerate(sorted([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history])):
                             diff_seconds = 0
                             if pre_datetime is not None:
                                 diff_seconds = (login_datetime - pre_datetime).total_seconds()
@@ -257,8 +224,8 @@ class CookieHistoryTask(luigi.Task):
                                 break
 
                             pre_datetime = login_datetime
-                    else:
-                        logger.warn("Not found {} in 'login' database in {}".format(cookie_id, self.ifile))
+                    #else:
+                    #    logger.warn("Not found {} in 'login' database in {}".format(cookie_id, self.ifile))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)

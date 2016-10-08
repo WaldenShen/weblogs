@@ -123,6 +123,31 @@ def is_uncategorized_key(s):
 
     return is_uncategorized
 
+def is_internal_ip(ip):
+    is_internal = False
+
+    ip = ip.lower()
+    if ip.count(".") == 3:
+        classA, classB, classC, classD = ip.split(".")
+        classA, classB, classC, classD = int(classA), int(classB), int(classC), int(classD)
+
+        if classA == 88:
+            if ip not in ["88.33.79.161","88.33.88.48","88.33.88.190","88.33.88.198"]:
+               if (classB <= 230 and classB not in [2, 4, 8, 33]) and (classC == 0 or (classC > 101 and classC < 130)) and (classD >= 177 and classD <= 190):
+                    is_internal = True
+               elif classB in [231, 233]:
+                    if ((classC > 31 and classC < 130) or (classC > 9 and classC < 11)) and (classD >= 177 and classD <= 190):
+                        is_internal = True
+                    elif classC > 131 and classD in [7,8,39,40,71,72,103,104,135,136,167,168,199,200,231,232]:
+                        is_internal = True
+        elif classA == 192 and classB == 168:
+            if classC == 229 and classD >= 0 and classD <= 63:
+                is_internal = True
+            elif classC in [92,93,94,95,252]:
+                is_internal = True
+
+    return is_internal
+
 def norm_url(url):
     start_idx = url.find("?")
     return url[:start_idx if start_idx > -1 else len(url)].replace("http://", "https://")
@@ -175,16 +200,19 @@ def _categorized_url(url, otype="all"):
 def _rich_url(logic1, logic2, function, intention):
     return logic1 + "_" + logic2 , logic1 + "_" + function, logic2 + "_" + function, logic1 + "_" + intention, logic2 + "_" + intention
 
-def parse_raw_page(line):
+def parse_raw_page(line, filter_internal_ip=True):
     global ENCODE_UTF8, SEP, FUNC_NONE
 
-    session_id, cookie_id, individual_id, _, url, creation_datetime, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
-    logic1, logic2, function, intention = _categorized_url(url)
-    logic, logic1_function, logic2_function, logic1_intention, logic2_intention = _rich_url(logic1, logic2, function, intention)
+    session_id, cookie_id, individual_id, _, url, creation_datetime, duration, active_duration, loading_duration, ip = line.decode(ENCODE_UTF8).strip().split(SEP)
+    if is_internal_ip(ip):
+        return None
+    else:
+        logic1, logic2, function, intention = _categorized_url(url)
+        logic, logic1_function, logic2_function, logic1_intention, logic2_intention = _rich_url(logic1, logic2, function, intention)
 
-    return session_id, cookie_id, individual_id, url, creation_datetime,\
-           logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-           FUNC_NONE(duration), FUNC_NONE(active_duration), FUNC_NONE(loading_duration)
+        return session_id, cookie_id, individual_id, url, creation_datetime,\
+               logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+               FUNC_NONE(duration), FUNC_NONE(active_duration), FUNC_NONE(loading_duration)
 
 def get_date_type(filename):
     date = os.path.basename(filename).split("_")[1].split(".")[0]
@@ -249,17 +277,12 @@ def norm_str(value):
 
 if __name__ == "__main__":
     '''
-    # Create the login_datetime database
-
-    filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
-    for filepath in sorted(glob.glob(filepath_raw_cookie)):
-        if len(os.path.basename(filepath)) > 22:
-            create_cookie_history(filepath)
-            print("current filepath is {}".format(filepath))
-    '''
-
     out_file = gzip.open("cookie_behavior.gz", "ab")
     for filepath in sorted(glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz"))):
         print("Start to proceed {}".format(filepath))
         create_behavior(filepath, out_file)
     out_file.close()
+    '''
+
+    ip = "88.114.0.181"
+    print ip, is_internal_ip(ip)

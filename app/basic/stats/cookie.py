@@ -35,19 +35,22 @@ def luigi_run(filepath, filter_app=False, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, url, creation_datetime,\
-                logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-                duration, active_duration, loading_duration = parse_raw_page(line)
+                info = parse_raw_page(line)
 
-                if filter_app and is_app_log(url):
-                    continue
+                if info:
+                    session_id, cookie_id, individual_id, url, creation_datetime,\
+                    logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                    duration, active_duration, loading_duration = parse_raw_page(line)
 
-                results.setdefault(cookie_id, {})
+                    if filter_app and is_app_log(url):
+                        continue
 
-                for name, value in zip(ALL_CATEGORIES, [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
-                    key = name + "#" + value
-                    results[cookie_id].setdefault(key, 0)
-                    results[cookie_id][key] += 1
+                    results.setdefault(cookie_id, {})
+
+                    for name, value in zip(ALL_CATEGORIES, [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
+                        key = name + "#" + value
+                        results[cookie_id].setdefault(key, 0)
+                        results[cookie_id][key] += 1
 
     return results
 

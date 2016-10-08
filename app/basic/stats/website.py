@@ -37,10 +37,6 @@ loading_duration        937515.0
 count_failed            -- 先忽略
 count_session           253515
 count_cookie            193152
-count_logic1             {"理財": 12, "信貸": 1}
-count_logic2
-count_function          {"登入": 1, "查詢": 2}
-count_intention         {"旅遊": 1, "有車": 5}
 '''
 
 def luigi_run(filepath, filter_app=False, results={}):
@@ -52,56 +48,61 @@ def luigi_run(filepath, filter_app=False, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, url, creation_datetime,\
-                logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-                duration, active_duration, loading_duration = parse_raw_page(line)
+                info = parse_raw_page(line)
 
-                if filter_app and is_app_log(url):
-                    continue
+                if info:
+                    session_id, cookie_id, individual_id, url, creation_datetime,\
+                    logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                    duration, active_duration, loading_duration = parse_raw_page(line)
 
-                website = urlparse(url).netloc
+                    if filter_app and is_app_log(url):
+                        continue
 
-                for domain in [website, "all"]:
-                    init_r = {"domain": None,
-                              "profile_view": set(),
-                              "page_view": 0,
-                              "user_view": set(),
-                              "duration": 0,
-                              "active_duration": 0,
-                              "loading_duration": 0,
-                              "count_failed": 0,
-                              "count_session": 0,
-                              "count_logic1": {},
-                              "count_logic2": {},
-                              "count_function": {},
-                              "count_intention": {},
-                              "count_logic": {},
-                              "count_logic1_function": {},
-                              "count_logic2_function": {},
-                              "count_logic1_intention": {},
-                              "count_logic2_intention": {}}
+                    website = urlparse(url).netloc
 
-                    results.setdefault(domain, init_r)
+                    for domain in [website, "all"]:
+                        init_r = {"domain": None,
+                                  "profile_view": set(),
+                                  "page_view": 0,
+                                  "user_view": set(),
+                                  "duration": 0,
+                                  "active_duration": 0,
+                                  "loading_duration": 0,
+                                  "count_failed": 0,
+                                  "count_session": 0,}
+                                  #"count_logic1": {},
+                                  #"count_logic2": {},
+                                  #"count_function": {},
+                                  #"count_intention": {},
+                                  #"count_logic": {},
+                                  #"count_logic1_function": {},
+                                  #"count_logic2_function": {},
+                                  #"count_logic1_intention": {},
+                                  #"count_logic2_intention": {}}
 
-                    results[domain]["domain"] = domain
-                    results[domain]["page_view"] += 1
-                    results[domain]["user_view"].add(cookie_id)
+                        results.setdefault(domain, init_r)
 
-                    if individual_id.lower() != "none":
-                        results[domain]["profile_view"].add(individual_id)
+                        results[domain]["domain"] = domain
+                        results[domain]["page_view"] += 1
+                        results[domain]["user_view"].add(cookie_id)
 
-                    results[domain]["duration"] += duration
-                    results[domain]["active_duration"] += active_duration
-                    results[domain]["loading_duration"] += loading_duration
+                        if individual_id.lower() != "none":
+                            results[domain]["profile_view"].add(individual_id)
 
-                    if session_id != session:
-                        results[domain]["count_session"] += 1
+                        results[domain]["duration"] += duration
+                        results[domain]["active_duration"] += active_duration
+                        results[domain]["loading_duration"] += loading_duration
 
-                    for key, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
-                        results[domain]["count_{}".format(key)].setdefault(value, 0)
-                        results[domain]["count_{}".format(key)][value] += 1
+                        if session_id != session:
+                            results[domain]["count_session"] += 1
 
-                session = session_id
+                        '''
+                        for key, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
+                            results[domain]["count_{}".format(key)].setdefault(value, 0)
+                            results[domain]["count_{}".format(key)][value] += 1
+                        '''
+
+                    session = session_id
 
     return results
 
@@ -115,8 +116,10 @@ def luigi_dump(out_file, results, creation_datetime, date_type):
         d["user_view"] = len(d["user_view"])
         d["profile_view"] = len(d["profile_view"])
 
+        '''
         for key in ["count_logic1", "count_logic2", "count_function", "count_intention", "count_logic", "count_logic1_function", "count_logic2_function", "count_logic1_intention", "count_logic2_intention"]:
             d[key] = json.dumps(d[key])
+        '''
 
         try:
             out_file.write(bytes("{}\n".format(json.dumps(d)), ENCODE_UTF8))
