@@ -27,6 +27,8 @@ class VizTask(luigi.Task):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
 class VizRetentionTask(VizTask):
+    task_namespace = "clickstream"
+
     def run(self):
         global BASEPATH_ADV
 

@@ -99,5 +99,10 @@ if __name__ == "__main__":
             create_cookie_history(filepath)
             print("current filepath is {}".format(filepath))
     '''
-    for k, v in load_interval():
-        print k, v
+    times = {}
+    for cookie_id, dates in load_history():
+        times.setdefault(len(dates), 0)
+        times[len(dates)] += 1
+
+    for k in sorted(times.keys()):
+        print k, times[k]
