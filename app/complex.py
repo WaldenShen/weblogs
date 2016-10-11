@@ -21,7 +21,7 @@ from utils import get_date_type, parse_datetime, parse_raw_page, is_app_log, nor
 from behavior import save_cookie_interval, load_cookie_history, save_cookie_history
 
 from utils import SEP, NEXT, ENCODE_UTF8, UNKNOWN, INTERVAL
-from utils import ALL_CATEGORIES, LOGIC1, LOGIC2, FUNCTION, INTENTION
+from utils import ALL_CATEGORIES,LOGIC, LOGIC1, LOGIC2, FUNCTION, INTENTION
 
 logger = logging.getLogger('luigi-interface')
 
@@ -331,7 +331,7 @@ class MappingTask(luigi.Task):
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
-class CommunityDetectionTask(luigi.Task):
+class CategoryDetectionTask(luigi.Task):
     task_namespace = "clickstream"
 
     ifiles = luigi.ListParameter()
@@ -341,17 +341,23 @@ class CommunityDetectionTask(luigi.Task):
 
     def add_edge(self,g, nodes, durations):
         for i, node_start in enumerate(nodes):
-           for ii, node_end in enumerate(nodes[i+1:]):
-               if node_start != node_end:
-                   weight = 0.5 + min(0.5, 0.5*(float(durations[i+ii])/1000/60/2.5))
+            for ii, node_end in enumerate(nodes[i+1:]):
+                if node_start != node_end:
+                    durations[i+1] /= 1000
 
-                   if g.has_edge(node_start, node_end):
-                       g[node_start][node_end]["weight"] += weight
-                   else:
-                       g.add_weighted_edges_from([(node_start, node_end, weight)])
+                    if durations[i+1] < 10:
+                        weight = 0.25
+                    else:
+                        weight = 0.5 + min(0.5, 0.5*(float(durations[i+ii])/60/2))
+
+                    if g.has_edge(node_start, node_end):
+                        g[node_start][node_end]["weight"] += weight
+                    else:
+                        g.add_weighted_edges_from([(node_start, node_end, weight)])
 
     def run(self):
         global ENCODE_UTF8
+        global LOGIC, LOGIC1, LOGIC2, FUNCTION, INTENTION
 
         g = nx.Graph()
         for filepath in self.ifiles:
@@ -376,13 +382,13 @@ class CommunityDetectionTask(luigi.Task):
                             durations = []
 
                         key = None
-                        if self.node == "logic1":
+                        if self.node == LOGIC1:
                             key = logic1
-                        elif self.node == "logic":
+                        elif self.node == LOGIC:
                             key = logic
-                        elif self.node == "intention":
+                        elif self.node == INTENTION:
                             key = intention
-                        elif self.node == "function":
+                        elif self.node == FUNCTION:
                             key = function
                         elif self.node == "logic1_intention":
                             key = logic1_intention
@@ -395,6 +401,52 @@ class CommunityDetectionTask(luigi.Task):
 
             self.add_edge(g, nodes, durations)
             logger.info("Finish {} with {}, and the size of graph is ({}, {})".format(filepath, self.node, g.number_of_nodes(), g.number_of_edges()))
+
+        write_dot(g, self.output().fn)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
+
+class CommunityDetectionTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifiles = luigi.ListParameter()
+    ofile = luigi.Parameter()
+
+    def run(self):
+        global ENCODE_UTF8
+        global LOGIC, LOGIC1, LOGIC2, FUNCTION, INTENTION
+
+        g = nx.Graph()
+        for filepath in self.ifiles:
+            with gzip.open(filepath, "rb") as in_file:
+                is_header = True
+
+                for line in in_file:
+                    if is_header:
+                        is_header = False
+                    else:
+                        o = json.loads(line.decode(ENCODE_UTF8).strip())
+                        cookie_id = o["cookie_id"].replace('"', '')
+                        if cookie_id != "cookie_id":
+                            products, intentions = o[LOGIC1], o[INTENTION]
+                            total_count = sum([c for c in products.values()])
+
+                            for shape, item in zip(["triangle", "box"], [products, intentions]):
+                                for k, v in item.items():
+                                    k, v = norm_str(k), float(v)/total_count
+
+                                    if not is_uncategorized_key(k) and k != "myb2b" and k.find("cub") == -1 and k.find("b2b") == -1 and k.find(u"網銀") == -1 and k.find(u"集團公告") == -1:
+                                        if not g.has_node(cookie_id):
+                                            g.add_node(cookie_id, shape="circle")
+
+                                        if not g.has_node(k):
+                                            g.add_node(k, shape="triangle")
+
+                                        if g.has_edge(cookie_id, k):
+                                            g[cookie_id][k]["weight"] += float(v)
+                                        else:
+                                            g.add_weighted_edges_from([(cookie_id, k, v)])
 
         write_dot(g, self.output().fn)
 
