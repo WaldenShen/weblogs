@@ -89,3 +89,12 @@ def save_cookie_interval(cookie_id, record):
         DB_INTERVAL_REDIS.set(cookie_id, json.dumps(ret))
     else:
         DB_INTERVAL_REDIS.set(cookie_id, json.dumps(record))
+
+if __name__ == "__main__":
+    times = {}
+    for cookie_id, dates in load_history():
+        times.setdefault(len(dates), 0)
+        times[len(dates)] += 1
+
+    for k in sorted(times.keys()):
+        print k, times[k]

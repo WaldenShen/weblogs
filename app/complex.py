@@ -413,6 +413,8 @@ class CommunityDetectionTask(luigi.Task):
     ifiles = luigi.ListParameter()
     ofile = luigi.Parameter()
 
+    visits = luigi.IntParameter(default=3)
+
     def run(self):
         global ENCODE_UTF8
         global LOGIC, LOGIC1, LOGIC2, FUNCTION, INTENTION
@@ -428,6 +430,10 @@ class CommunityDetectionTask(luigi.Task):
                     else:
                         o = json.loads(line.decode(ENCODE_UTF8).strip())
                         cookie_id = o["cookie_id"].replace('"', '')
+                        dates = load_cookie_history(cookie_id)
+                        if len(dates) < self.visits:
+                            continue
+
                         if cookie_id != "cookie_id":
                             products, intentions = o[LOGIC1], o[INTENTION]
                             total_count = sum([c for c in products.values()])
@@ -436,15 +442,15 @@ class CommunityDetectionTask(luigi.Task):
                                 for k, v in item.items():
                                     k, v = norm_str(k), float(v)/total_count
 
-                                    if not is_uncategorized_key(k) and k != "myb2b" and k.find("cub") == -1 and k.find("b2b") == -1 and k.find(u"網銀") == -1 and k.find(u"集團公告") == -1:
+                                    if not is_uncategorized_key(k) and k != "myb2b" and k.find("cub") == -1 and k.find("b2b") == -1 and k.find(u"網銀") == -1 and k.find(u"集團公告") == -1 and k.find(u"選單") == -1:
                                         if not g.has_node(cookie_id):
                                             g.add_node(cookie_id, shape="circle")
 
                                         if not g.has_node(k):
-                                            g.add_node(k, shape="triangle")
+                                            g.add_node(k, shape=shape)
 
                                         if g.has_edge(cookie_id, k):
-                                            g[cookie_id][k]["weight"] += float(v)
+                                            g[cookie_id][k]["weight"] += v
                                         else:
                                             g.add_weighted_edges_from([(cookie_id, k, v)])
 
