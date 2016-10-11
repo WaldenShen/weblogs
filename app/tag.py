@@ -1,4 +1,5 @@
 #!/usr/bin/python
+# coding=UTF-8
 
 import os
 import json
@@ -8,8 +9,8 @@ import logging
 import luigi
 from luigi import date_interval as d
 
-from utils import is_uncategorized_key
-from utils import ENCODE_UTF8, SEP
+from utils import is_uncategorized_key, norm_str
+from utils import ENCODE_UTF8, SEP, LOGIC, INTENTION
 
 logger = logging.getLogger('luigi-interface')
 logger.setLevel(logging.INFO)
@@ -40,8 +41,24 @@ class TagOutputTask(luigi.Task):
                     cookie.setdefault(o["cookie_id"], {})
                     for k, v in o[self.tagtype].items():
                         if not is_uncategorized_key(k):
-                            cookie[o["cookie_id"]].setdefault(k, 0)
-                            cookie[o["cookie_id"]][k] += v
+                            k = norm_str(k)
+
+                            if self.tagtype == LOGIC:
+                                if k.find(u"信用卡") > -1 and k.find(u"停止") == -1:
+                                    subkey = k.split("_")[1]
+                                    is_matching = False
+                                    for kk in [u"信用卡", u"開卡", u"循環", u"分期付款", u"w@card", u"分期", u"調額", u"w", u"帳單分期", u"調升額度", u"餘額代償", u""]:
+                                        if subkey == kk:
+                                            is_matching = True
+                                            break
+
+                                    if not is_matching:
+                                        cookie[o["cookie_id"]].setdefault(k, 0)
+                                        cookie[o["cookie_id"]][k] += v
+
+                            else:
+                                cookie[o["cookie_id"]].setdefault(k, 0)
+                                cookie[o["cookie_id"]][k] += v
 
             logger.info("Finish {} with {}, the size of cookie is {}".format(filepath, self.tagtype, len(cookie)))
 
@@ -69,6 +86,6 @@ class TagTask(luigi.Task):
             interval = d.Date.parse(str(date))
             ifiles.append(os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date))))
 
-        for tagtype in ["logic1", "intention"]:
+        for tagtype in [LOGIC, INTENTION]:
             ofile = os.path.join(BASEPATH_TAG, "{}_{}.tsv.gz".format(tagtype, str(interval)))
             yield TagOutputTask(ifiles=ifiles, ofile=ofile, tagtype=tagtype)

@@ -22,6 +22,7 @@ ENCODE_UTF8 = "UTF-8"
 
 COUNT = "count"
 FUNCTION = "function"
+LOGIC = "logic"
 LOGIC1 = "logic1"
 LOGIC2 = "logic2"
 INTENTION = "intention"
