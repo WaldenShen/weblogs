@@ -10,8 +10,9 @@ import luigi
 import logging
 
 import networkx as nx
-#import pygraphviz
-from networkx.drawing.nx_agraph import write_dot
+import pygraphviz
+
+from networkx.drawing.nx_agraph import write_dot, read_dot
 
 from datetime import datetime
 from saisyo import RawPath
@@ -28,6 +29,7 @@ logger = logging.getLogger('luigi-interface')
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
+BASEPATH_CLUSTER = os.path.join(BASEPATH, "data", "cluster")
 
 
 class CommonPathTask(luigi.Task):
@@ -262,11 +264,13 @@ class IntervalTask(luigi.Task):
                     category_type, category_key, category_value = o["category_type"], o["category_key"], o["category_value"]
                     prev_interval = o["prev_interval"]
 
-                    if total_count2 > 0 and prev_interval > 0:
+                    if total_count2 > 0:
                         results.setdefault(cookie_id, {}).setdefault(category_type, {}).setdefault(category_key, category_value)
                         results[cookie_id][INTERVAL] = [0, 0]
                         results[cookie_id][INTERVAL][0] += prev_interval
-                        results[cookie_id][INTERVAL][1] += 1
+
+                        if prev_interval > 0:
+                            results[cookie_id][INTERVAL][1] += 1
 
         with self.output().open("wb") as out_file:
             for cookie_id, record in results.items():
@@ -338,9 +342,13 @@ class CategoryDetectionTask(luigi.Task):
                     if is_header:
                         is_header = False
                     else:
+                        info = parse_raw_page(line)
+                        if info is None:
+                            continue
+
                         session_id, cookie_id, individual_id, url, creation_datetime,\
                         logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-                        duration, active_duration, loading_duration = parse_raw_page(line)
+                        duration, active_duration, loading_duration = info
 
                         if pre_session_id is not None and pre_session_id != session_id:
                             self.add_edge(g, nodes, durations)
@@ -369,12 +377,16 @@ class CategoryDetectionTask(luigi.Task):
             self.add_edge(g, nodes, durations)
             logger.info("Finish {} with {}, and the size of graph is ({}, {})".format(filepath, self.node, g.number_of_nodes(), g.number_of_edges()))
 
+        folder = os.path.dirname(self.output().fn)
+        if not os.path.isdir(folder):
+            os.makedirs(folder)
+
         write_dot(g, self.output().fn)
 
     def output(self):
         return luigi.LocalTarget(self.ofile)
 
-class CommunityDetectionTask(luigi.Task):
+class CommunityDetectionRawTask(luigi.Task):
     task_namespace = "clickstream"
 
     ifiles = luigi.ListParameter()
@@ -421,7 +433,40 @@ class CommunityDetectionTask(luigi.Task):
                                         else:
                                             g.add_weighted_edges_from([(cookie_id, k, v)])
 
+            logger.info("Finish {}, and the size of graph is ({}, {})".format(filepath, g.number_of_nodes(), g.number_of_edges()))
+
+        folder = os.path.dirname(self.output().fn)
+        if not os.path.isdir(folder):
+            os.makedirs(folder)
+
         write_dot(g, self.output().fn)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
+
+class CommunityDetectionTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ofile = luigi.Parameter()
+
+    visits = luigi.IntParameter(default=3)
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        for date in self.interval:
+            ifiles = [os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))]
+            ofile = os.path.join(BASEPATH_CLUSTER, "community_{}.dot".format(str(date)))
+            yield CommunityDetectionRawTask(visits=self.visits, ifiles=ifiles, ofile=ofile)
+
+    def run(self):
+        union_graph = nx.Graph()
+
+        for input in self.input():
+            g = nx.Graph(read_dot(input.fn))
+
+            union_graph = nx.compose(union_graph, g)
+
+        write_dot(union_graph, self.output().fn)
 
     def output(self):
         return luigi.LocalTarget(self.ofile)

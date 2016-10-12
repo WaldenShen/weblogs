@@ -9,11 +9,13 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, CookieHistoryTask, CommunityDetectionTask#, TableauPageTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, CookieHistoryTask, CommunityDetectionTask
+from complex import CommunityDetectionTask, CategoryDetectionTask
+from tag import TagOutputTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
-from utils import ALL_CATEGORIES
+from utils import ALL_CATEGORIES, LOGIC, LOGIC1, INTENTION
 
 logger = logging.getLogger('luigi-interface')
 logger.setLevel(logging.INFO)
@@ -24,7 +26,8 @@ BASEPATH_DB = os.path.join(BASEPATH, "data", "db")
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
-BASEPATH_TABLEAU = os.path.join(BASEPATH, "data", "tableau")
+BASEPATH_TAG = os.path.join(BASEPATH, "data", "tag")
+BASEPATH_CLUSTER = os.path.join(BASEPATH, "data", "cluster")
 
 
 class RawTask(luigi.Task):
@@ -166,11 +169,6 @@ class AdvancedTask(luigi.Task):
                 ofile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
                 yield MappingTask(ifile=ifile, ofile=ofile)
 
-                ifiles = []
-                for hour in range(0, 24):
-                    ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
-                    ifiles_community_detection.append(ifiles[-1])
-
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:
                     ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, str(date)))
@@ -181,10 +179,6 @@ class AdvancedTask(luigi.Task):
                         ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}{:02d}.tsv.gz".format(node_type, str(date), hour))
                         yield PageCorrTask(ofile=ofile_page_corr, interval=interval, hour=hour, ntype=node_type, **self.adv_corr)
                 '''
-
-            for node in ["logic1", "logic", "intention", "function", "logic1_intention"]:
-                ofile = "../data/cluster/{}_2016-09.dot".format(node)
-                yield CommunityDetectionTask(ifiles=ifiles_community_detection, ofile=ofile, node=node)
         else:
             raise NotImplementedError
 
@@ -271,3 +265,33 @@ class RDBTask(luigi.Task):
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplementedError
+
+class CMSTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    visits = luigi.IntParameter(default=10)
+    interval = luigi.DateIntervalParameter(default="2016-09-01-2016-09-03")
+
+    def requires(self):
+        global BASEPATH_TEMP, BASEPATH_RAW, BASEPATH_CLUSTER, BASEPATH_TAG
+
+        ofile = os.path.join(BASEPATH_CLUSTER, "communityunion_{}.dot".format(str(self.interval)))
+        yield CommunityDetectionTask(visits=self.visits, interval=self.interval, ofile=ofile)
+
+        for date in self.interval:
+            ifiles = []
+            for hour in range(0, 24):
+                ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
+
+            for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention"]:
+                ofile = os.path.join(BASEPATH_CLUSTER, "category{}_{}.dot".format(node, str(date)))
+                yield CategoryDetectionTask(node=node, ifiles=ifiles, ofile=ofile)
+
+        ifiles = []
+        for date in self.interval:
+            interval = d.Date.parse(str(date))
+            ifiles.append(os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date))))
+
+        for tagtype in [LOGIC, INTENTION]:
+            ofile = os.path.join(BASEPATH_TAG, "{}_{}.tsv.gz".format(tagtype, str(interval)))
+            yield TagOutputTask(ifiles=ifiles, ofile=ofile, tagtype=tagtype)

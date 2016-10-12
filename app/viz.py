@@ -60,17 +60,18 @@ class VizIntervalTask(VizTask):
             out_file.write("分類{sep}子分類{sep}間隔\n".format(sep=SEP))
 
             for cookie_id, info in load_interval():
-                interval = float(info[INTERVAL][0]) / info[INTERVAL][1] / 86400
+                if info[INTERVAL][1] > 0:
+                    interval = float(info[INTERVAL][0]) / info[INTERVAL][1] / 86400
 
-                for category_type, category in info.items():
-                    if category_type != INTERVAL:
-                        max_name, max_value = None, -1
-                        for name, value in category.items():
-                            if name not in [u"首頁", u"其他"] and value > max_value:
-                                max_value, max_name = value, name
+                    for category_type, category in info.items():
+                        if category_type != INTERVAL:
+                            max_name, max_value = None, -1
+                            for name, value in category.items():
+                                if name not in [u"首頁", u"其他"] and value > max_value:
+                                    max_value, max_name = value, name
 
-                    if max_name:
-                        out_file.write("{}{sep}{}{sep}{}\n".format(category_type, max_name.encode(ENCODE_UTF8), interval, sep=SEP))
+                        if max_name:
+                            out_file.write("{}{sep}{}{sep}{}\n".format(category_type, max_name.encode(ENCODE_UTF8), interval, sep=SEP))
 
 '''
 INPUT
