@@ -10,7 +10,7 @@ import luigi
 import logging
 
 import networkx as nx
-import pygraphviz
+#import pygraphviz
 from networkx.drawing.nx_agraph import write_dot
 
 from datetime import datetime

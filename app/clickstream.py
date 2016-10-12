@@ -9,7 +9,7 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, TableauPageTask, CookieHistoryTask, CommunityDetectionTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, CookieHistoryTask, CommunityDetectionTask#, TableauPageTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
