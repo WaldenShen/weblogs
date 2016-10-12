@@ -91,13 +91,15 @@ def save_cookie_interval(cookie_id, record):
         DB_INTERVAL_REDIS.set(cookie_id, json.dumps(record))
 
 if __name__ == "__main__":
-    # Create the login_datetime database
     '''
+    # Create the login_datetime database
     filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
     for filepath in sorted(glob.glob(filepath_raw_cookie)):
         if len(os.path.basename(filepath)) > 22:
             create_cookie_history(filepath)
             print("current filepath is {}".format(filepath))
+    '''
+
     '''
     times = {}
     for cookie_id, dates in load_history():
@@ -106,3 +108,11 @@ if __name__ == "__main__":
 
     for k in sorted(times.keys()):
         print k, times[k]
+    '''
+
+    '''
+    for cookie_id, info in load_interval():
+        print cookie_id,
+        print info
+    '''
+    print load_cookie_interval("4a95a414e23e4a0d9a583eaca26d0ba8")

@@ -216,7 +216,7 @@ def parse_raw_page(line, filter_internal_ip=True):
                FUNC_NONE(duration), FUNC_NONE(active_duration), FUNC_NONE(loading_duration)
 
 def get_date_type(filename):
-    date = os.path.basename(filename).split("_")[1].split(".")[0]
+    date = os.path.basename(filename).split("_")[-1].split(".")[0]
 
     date_type = None
     if len(date) == 12:
