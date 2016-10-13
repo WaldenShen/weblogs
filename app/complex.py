@@ -29,7 +29,7 @@ BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
 BASEPATH_CLUSTER = os.path.join(BASEPATH, "data", "cluster")
-
+BASEPATH_TEMP = os.path.join(BASEPATH, "data", "temp")
 
 class CommonPathTask(luigi.Task):
     task_namespace = "clickstream"
@@ -301,7 +301,7 @@ class MappingTask(luigi.Task):
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
-class CategoryDetectionTask(luigi.Task):
+class CategoryDetectionRawTask(luigi.Task):
     task_namespace = "clickstream"
 
     ifiles = luigi.ListParameter()
@@ -385,6 +385,41 @@ class CategoryDetectionTask(luigi.Task):
     def output(self):
         return luigi.LocalTarget(self.ofile)
 
+class CategoryDetectionTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ofile = luigi.Parameter()
+
+    interval = luigi.DateIntervalParameter()
+    node = luigi.Parameter()
+
+    def requires(self):
+        global BASEPATH_TEMP
+        global BASEPATH_CLUSTER
+
+        for date in self.interval:
+            ifiles = []
+            for hour in range(0, 24):
+                ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
+
+            ofile = os.path.join(BASEPATH_CLUSTER, "category{}_{}.dot".format(self.node, str(date)))
+            yield CategoryDetectionRawTask(node=self.node, ifiles=ifiles, ofile=ofile)
+
+    def run(self):
+        g = nx.Graph()
+
+        for input in self.input():
+            sub_g = nx.Graph(read_dot(input.fn))
+            g.add_edges_from(combined_graphs_edges(g, sub_g))
+            g.add_nodes_from(g.nodes(data=True) + sub_g.nodes(data=True))
+
+            logger.info("Finish {}, and the size of graph is ({}, {})".format(input.fn, g.number_of_nodes(), g.number_of_edges()))
+
+        write_dot(g, self.output().fn)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
+
 class CommunityDetectionRawTask(luigi.Task):
     task_namespace = "clickstream"
 
@@ -458,14 +493,54 @@ class CommunityDetectionTask(luigi.Task):
             yield CommunityDetectionRawTask(visits=self.visits, ifiles=ifiles, ofile=ofile)
 
     def run(self):
-        union_graph = nx.Graph()
+        g = nx.Graph()
 
         for input in self.input():
-            g = nx.Graph(read_dot(input.fn))
+            #union_graph = nx.compose(union_graph, nx.Graph(read_dot(input.fn)))
+            sub_g = nx.Graph(read_dot(input.fn))
+            g.add_edges_from(combined_graphs_edges(g, sub_g))
+            g.add_nodes_from(g.nodes(data=True) + sub_g.nodes(data=True))
+            logger.info("Finish {}, and the size of graph is ({}, {})".format(input.fn, g.number_of_nodes(), g.number_of_edges()))
 
-            union_graph = nx.compose(union_graph, g)
-
-        write_dot(union_graph, self.output().fn)
+        write_dot(g, self.output().fn)
 
     def output(self):
         return luigi.LocalTarget(self.ofile)
+
+def combined_graphs_edges(G, H, weight = 1.0):
+    for u,v,hdata in H.edges_iter(data=True):
+        # multply attributes of H by weight
+        attr = dict( (key, float(value)*weight) for key,value in hdata.items())
+
+        # get data from G or use empty dict if no edge in G
+        gdata = {}
+        if G.has_node(u):
+            gdata = G[u].get(v,{})
+
+        # add data from g
+        # sum shared items
+        shared = set(gdata) & set(hdata)
+        attr.update(dict((key, attr[key] + float(gdata[key])) for key in shared))
+
+        # non shared items
+        non_shared = set(gdata) - set(hdata)
+        attr.update(dict((key, gdata[key]) for key in non_shared))
+
+        yield u, v, attr
+
+if __name__ == "__main__":
+    a = nx.Graph(read_dot("dot1.dot"))
+    b = nx.Graph(read_dot("dot2.dot"))
+
+    for g in [a, b]:
+        for node in g.nodes():
+            print g[node]
+
+        print
+
+    print list(combined_graphs_edges(a, b, weight=1))
+
+    g = nx.Graph()
+    g.add_edges_from(combined_graphs_edges(a, b, weight=1))
+    for node in g.nodes():
+        print g[node]

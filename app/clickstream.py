@@ -270,7 +270,7 @@ class CMSTask(luigi.Task):
     task_namespace = "clickstream"
 
     visits = luigi.IntParameter(default=10)
-    interval = luigi.DateIntervalParameter(default="2016-09-01-2016-09-03")
+    interval = luigi.DateIntervalParameter()
 
     def requires(self):
         global BASEPATH_TEMP, BASEPATH_RAW, BASEPATH_CLUSTER, BASEPATH_TAG
@@ -278,14 +278,9 @@ class CMSTask(luigi.Task):
         ofile = os.path.join(BASEPATH_CLUSTER, "communityunion_{}.dot".format(str(self.interval)))
         yield CommunityDetectionTask(visits=self.visits, interval=self.interval, ofile=ofile)
 
-        for date in self.interval:
-            ifiles = []
-            for hour in range(0, 24):
-                ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
-
-            for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention"]:
-                ofile = os.path.join(BASEPATH_CLUSTER, "category{}_{}.dot".format(node, str(date)))
-                yield CategoryDetectionTask(node=node, ifiles=ifiles, ofile=ofile)
+        for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention"]:
+            ofile = os.path.join(BASEPATH_CLUSTER, "categoryunion{}_{}.dot".format(node, str(self.interval)))
+            yield CategoryDetectionTask(interval=self.interval, node=node, ofile=ofile)
 
         ifiles = []
         for date in self.interval:
