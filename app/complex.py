@@ -427,7 +427,8 @@ class CommunityDetectionRawTask(luigi.Task):
     ifiles = luigi.ListParameter()
     ofile = luigi.Parameter()
 
-    visits = luigi.IntParameter(default=3)
+    uvisits = luigi.IntParameter(default=5)
+    lvisits = luigi.IntParameter(default=10)
 
     def run(self):
         global ENCODE_UTF8
@@ -445,10 +446,18 @@ class CommunityDetectionRawTask(luigi.Task):
                         o = json.loads(line.decode(ENCODE_UTF8).strip())
                         cookie_id = o["cookie_id"].replace('"', '')
                         dates = load_cookie_history(cookie_id)
-                        if len(dates) < self.visits:
+                        if len(dates) < self.lvisits and len(dates) > self.uvisits:
                             continue
 
                         if cookie_id != "cookie_id":
+                            history = load_cookie_history(cookie_id)
+                            for idx, login_datetime in enumerate(sorted([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history])):
+                                if login_datetime == o["creation_datetime"]:
+                                    break
+
+                            if idx+1 < self.lvisits and idx+1 > self.uvisits:
+                                continue
+
                             products, intentions = o[LOGIC1], o[INTENTION]
                             total_count = sum([c for c in products.values()])
 

@@ -269,14 +269,13 @@ class RDBTask(luigi.Task):
 class CMSTask(luigi.Task):
     task_namespace = "clickstream"
 
-    visits = luigi.IntParameter(default=10)
     interval = luigi.DateIntervalParameter()
 
     def requires(self):
         global BASEPATH_TEMP, BASEPATH_RAW, BASEPATH_CLUSTER, BASEPATH_TAG
 
         ofile = os.path.join(BASEPATH_CLUSTER, "communityunion_{}.dot".format(str(self.interval)))
-        yield CommunityDetectionTask(visits=self.visits, interval=self.interval, ofile=ofile)
+        yield CommunityDetectionTask(interval=self.interval, ofile=ofile)
 
         for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention"]:
             ofile = os.path.join(BASEPATH_CLUSTER, "categoryunion{}_{}.dot".format(node, str(self.interval)))
