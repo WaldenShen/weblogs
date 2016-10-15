@@ -37,45 +37,48 @@ def luigi_run(filepath, filter_app=False, results={}):
             if is_header:
                 is_header = False
             else:
-                session_id, cookie_id, individual_id, url, creation_datetime,\
-                logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-                duration, active_duration, loading_duration = parse_raw_page(line)
+                info = parse_raw_page(line)
 
-                if filter_app and is_app_log(url):
-                    continue
+                if info:
+                    session_id, cookie_id, individual_id, url, creation_datetime,\
+                    logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                    duration, active_duration, loading_duration = parse_raw_page(line)
 
-                for name, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function , intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
-                    key = name + "_" + value
+                    if filter_app and is_app_log(url):
+                        continue
 
-                    init_r = {"category_key": None,
-                              "category_value": None,
-                              "n_count": 0}
+                    for name, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function , intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
+                        key = name + "_" + value
 
-                    results.setdefault(key, init_r)
-                    results[key]["category_key"] = name
-                    results[key]["category_value"] = value
+                        init_r = {"category_key": None,
+                                  "category_value": None,
+                                  "n_count": 0}
 
-                if pre_session_id is not None and pre_session_id != session_id:
-                    for key, info in piece.items():
-                        results[key]["n_count"] += float(info["n_count"]) / pre_total_count
+                        results.setdefault(key, init_r)
+                        results[key]["category_key"] = name
+                        results[key]["category_value"] = value
 
-                    pre_total_count = 0
-                    piece = {}
+                    if pre_session_id is not None and pre_session_id != session_id:
+                        for key, info in piece.items():
+                            results[key]["n_count"] += float(info["n_count"]) / pre_total_count
 
-                for name, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function , intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
-                    key = name + "_" + value
+                        pre_total_count = 0
+                        piece = {}
 
-                    init_r = {"category_key": None,
-                              "category_value": None,
-                              "n_count": 0}
+                    for name, value in zip(["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"], [logic1, logic2, function , intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]):
+                        key = name + "_" + value
 
-                    piece.setdefault(key, init_r)
-                    piece[key]["category_key"] = name
-                    piece[key]["category_value"] = value
-                    piece[key]["n_count"] += 1
+                        init_r = {"category_key": None,
+                                  "category_value": None,
+                                  "n_count": 0}
 
-                pre_session_id = session_id
-                pre_total_count += 1
+                        piece.setdefault(key, init_r)
+                        piece[key]["category_key"] = name
+                        piece[key]["category_value"] = value
+                        piece[key]["n_count"] += 1
+
+                    pre_session_id = session_id
+                    pre_total_count += 1
 
     for key, info in piece.items():
         results[key]["n_count"] += float(info["n_count"]) / pre_total_count

@@ -17,17 +17,23 @@ except ImportError:
     from urllib.parse import urlparse
 
 SEP = "\t"
-OTHER = "其他"
 NEXT = ">"
 ENCODE_UTF8 = "UTF-8"
 
 COUNT = "count"
 FUNCTION = "function"
+LOGIC = "logic"
 LOGIC1 = "logic1"
 LOGIC2 = "logic2"
 INTENTION = "intention"
 
+INTERVAL = "interval"
+
 UNKNOWN = u"未分類"
+HOMEPAGE = u"首頁"
+OTHER = "其他"
+
+ALL_CATEGORIES = [LOGIC1, LOGIC2, FUNCTION, INTENTION, "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"]
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
@@ -63,8 +69,6 @@ FUNC_NONE = lambda x: float(x) if (x and x.lower() != "none") else 0
 
 CATEGORY_URL = None
 
-CONN_LOGIN_REDIS = redis.ConnectionPool(host='localhost', port=6379, db=0)
-DB_LOGIN_REDIS = redis.Redis(connection_pool=CONN_LOGIN_REDIS)
 
 def load_category(filepath=FILEPATH_CATEGORY):
     results = {}
@@ -111,9 +115,46 @@ def load_category(filepath=FILEPATH_CATEGORY):
 def is_app_log(log):
     return log.startswith("app://")
 
+def is_uncategorized_key(s):
+    global UNKNOWN, HOMEPAGE, OTHER
+
+    is_uncategorized = False
+    if s.find(UNKNOWN) > -1 or s.find(HOMEPAGE) > -1 or s.find(unicode(OTHER, ENCODE_UTF8)) > -1:
+        is_uncategorized = True
+
+    return is_uncategorized
+
+def is_internal_ip(ip):
+    is_internal = False
+
+    ip = ip.lower()
+    if ip.count(".") == 3:
+        classA, classB, classC, classD = ip.split(".")
+        classA, classB, classC, classD = int(classA), int(classB), int(classC), int(classD)
+
+        if classA == 88:
+            if ip not in ["88.33.79.161","88.33.88.48","88.33.88.190","88.33.88.198"]:
+               if (classB <= 230 and classB not in [2, 4, 8, 33]) and (classC == 0 or (classC > 101 and classC < 130)) and (classD >= 177 and classD <= 190):
+                    is_internal = True
+               elif classB in [231, 233]:
+                    if ((classC > 31 and classC < 130) or (classC > 9 and classC < 11)) and (classD >= 177 and classD <= 190):
+                        is_internal = True
+                    elif classC > 131 and classD in [7,8,39,40,71,72,103,104,135,136,167,168,199,200,231,232]:
+                        is_internal = True
+        elif classA == 192 and classB == 168:
+            if classC == 229 and classD >= 0 and classD <= 63:
+                is_internal = True
+            elif classC in [92,93,94,95,252]:
+                is_internal = True
+
+    return is_internal
+
 def norm_url(url):
     start_idx = url.find("?")
     return url[:start_idx if start_idx > -1 else len(url)].replace("http://", "https://")
+
+def norm_category(name):
+    return name.replace(" ", "").replace(u"投資理財", u"理財投資")
 
 def _categorized_url(url, otype="all"):
     global CATEGORY_URL, DOMAIN_MAP, FUNC, OTHER
@@ -144,25 +185,38 @@ def _categorized_url(url, otype="all"):
         ret = FUNC(intention, INTENTION)
     elif otype == "logic":
         ret = FUNC(logic1, LOGIC1) + "_" + FUNC(logic2, LOGIC2)
+    elif otype == "logic1_function":
+        ret = FUNC(logic2, LOGIC1) + "_" + FUNC(function, FUNCTION)
+    elif otype == "logic2_function":
+        ret = FUNC(logic2, LOGIC2) + "_" + FUNC(function, FUNCTION)
+    elif otype == "logic1_intention":
+        ret = FUNC(logic1, LOGIC1) + "_" + FUNC(intention, INTENTION)
+    elif otype == "logic2_intention":
+        ret = FUNC(logic2, LOGIC2) + "_" + FUNC(intention, INTENTION)
+    else:
+        raise NotImplementedError
 
     return ret
 
 def _rich_url(logic1, logic2, function, intention):
     return logic1 + "_" + logic2 , logic1 + "_" + function, logic2 + "_" + function, logic1 + "_" + intention, logic2 + "_" + intention
 
-def parse_raw_page(line):
+def parse_raw_page(line, filter_internal_ip=True):
     global ENCODE_UTF8, SEP, FUNC_NONE
 
-    session_id, cookie_id, individual_id, _, url, creation_datetime, duration, active_duration, loading_duration, _ = line.decode(ENCODE_UTF8).strip().split(SEP)
-    logic1, logic2, function, intention = _categorized_url(url)
-    logic, logic1_function, logic2_function, logic1_intention, logic2_intention = _rich_url(logic1, logic2, function, intention)
+    session_id, cookie_id, individual_id, _, url, creation_datetime, duration, active_duration, loading_duration, ip = line.decode(ENCODE_UTF8).strip().split(SEP)
+    if is_internal_ip(ip):
+        return None
+    else:
+        logic1, logic2, function, intention = _categorized_url(url)
+        logic, logic1_function, logic2_function, logic1_intention, logic2_intention = _rich_url(logic1, logic2, function, intention)
 
-    return session_id, cookie_id, individual_id, url, creation_datetime,\
-           logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-           FUNC_NONE(duration), FUNC_NONE(active_duration), FUNC_NONE(loading_duration)
+        return session_id, cookie_id, individual_id, url, creation_datetime,\
+               logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+               FUNC_NONE(duration), FUNC_NONE(active_duration), FUNC_NONE(loading_duration)
 
 def get_date_type(filename):
-    date = os.path.basename(filename).split("_")[1].split(".")[0]
+    date = os.path.basename(filename).split("_")[-1].split(".")[0]
 
     date_type = None
     if len(date) == 12:
@@ -193,48 +247,7 @@ def parse_datetime(creation_datetime):
 
     return creation_datetime
 
-def load_history():
-    global DB_LOGIN_REDIS
-
-    for cookie_id in DB_LOGIN_REDIS.keys():
-        yield cookie_id, json.loads(DB_LOGIN_REDIS.get(cookie_id))
-
-def load_cookie_history(cookie_id):
-    global DB_LOGIN_REDIS
-
-    ret = DB_LOGIN_REDIS.get(cookie_id)
-    if ret:
-        return json.loads(ret)
-    else:
-        return None
-
-def save_cookie_history(cookie_id, creation_datetime):
-    global DB_LOGIN_REDIS
-
-    DB_LOGIN_REDIS.set(cookie_id, json.dumps([creation_datetime.strftime("%Y-%m-%d %H:%M:%S")]))
-
-def create_cookie_history(filepath):
-    global ENCODE_UTF8, CONN_LOGIN_REDIS, DB_LOGIN_REDIS
-
-    with gzip.open(filepath, "rb") as in_file:
-        for line in in_file:
-            o = json.loads(line.decode(ENCODE_UTF8))
-            cookie_id, creation_datetime = o["cookie_id"], parse_datetime(o["creation_datetime"])
-
-            history = []
-            ret = DB_LOGIN_REDIS.get(cookie_id)
-            if ret:
-                history = json.loads(ret)
-            history.append(creation_datetime.strftime("%Y-%m-%d %H:%M:%S"))
-
-            DB_LOGIN_REDIS.set(cookie_id, json.dumps(history))
-
-    print("The size of db is {}".format(len(DB_LOGIN_REDIS.keys())))
-    print("The key of last record is {}".format(cookie_id))
-
-def unknown_urls():
-    filepath_raw_page = os.path.join(BASEPATH, "data", "temp", "page_2016-09-21*.tsv.gz")
-
+def unknown_urls(file_raw_page=os.path.join(BASEPATH, "data", "temp", "page_2016-09-21*.tsv.gz")):
     urls = {}
     for filepath in sorted(glob.glob(filepath_raw_page)):
         if len(os.path.basename(filepath)) > 20:
@@ -251,8 +264,6 @@ def unknown_urls():
                             urls.setdefault(norm_url(url), 0)
                             urls[norm_url(url)] += 1
 
-        print(filepath)
-
     with open("unknown_url.txt", "wb") as out_file:
         for url, count in urls.items():
             out_file.write(url.encode(ENCODE_UTF8))
@@ -267,17 +278,12 @@ def norm_str(value):
 
 if __name__ == "__main__":
     '''
-    # Create the login_datetime database
-
-    filepath_raw_cookie = os.path.join(BASEPATH, "data", "raw", "cookie_[0-9]*.tsv.gz")
-    for filepath in sorted(glob.glob(filepath_raw_cookie)):
-        if len(os.path.basename(filepath)) > 22:
-            create_cookie_history(filepath)
-            print("current filepath is {}".format(filepath))
-    '''
-
     out_file = gzip.open("cookie_behavior.gz", "ab")
     for filepath in sorted(glob.glob(os.path.join(BASEPATH_RAW, "cookie_*.tsv.gz"))):
         print("Start to proceed {}".format(filepath))
         create_behavior(filepath, out_file)
     out_file.close()
+    '''
+
+    ip = "88.114.0.181"
+    print ip, is_internal_ip(ip)

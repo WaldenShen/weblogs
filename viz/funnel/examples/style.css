@@ -1,0 +1,13 @@
+.container {
+  text-align: center;
+}
+
+.chart-example form {
+  margin: 20px 0;
+}
+
+.chart {
+  width: 400px;
+  height: 490px;
+  margin: 0 auto;
+}

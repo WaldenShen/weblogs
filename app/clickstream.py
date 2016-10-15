@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import sys
 import glob
 import luigi
 import logging
@@ -8,9 +9,13 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, CookieHistoryTask, MappingTask, TableauPageTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, CookieHistoryTask
+from complex import CommunityDetectionTask, CategoryDetectionTask
+from tag import TagOutputTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
+
+from utils import ALL_CATEGORIES, LOGIC, LOGIC1, INTENTION
 
 logger = logging.getLogger('luigi-interface')
 logger.setLevel(logging.INFO)
@@ -21,7 +26,8 @@ BASEPATH_DB = os.path.join(BASEPATH, "data", "db")
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
-BASEPATH_TABLEAU = os.path.join(BASEPATH, "data", "tableau")
+BASEPATH_TAG = os.path.join(BASEPATH, "data", "tag")
+BASEPATH_CLUSTER = os.path.join(BASEPATH, "data", "cluster")
 
 
 class RawTask(luigi.Task):
@@ -102,6 +108,21 @@ class RawTask(luigi.Task):
         else:
             raise NotImplementedError
 
+class SequenceTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        global BASEPATH_RAW, BASEPATH_ADV
+
+        for prior, date in enumerate(self.interval):
+            interval = d.Date.parse(str(date))
+
+            ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
+            ofile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
+            yield NALTask(prior=sys.maxint-prior, ifile=ifile, ofile=ofile)
+
 class AdvancedTask(luigi.Task):
     task_namespace = "clickstream"
 
@@ -118,14 +139,16 @@ class AdvancedTask(luigi.Task):
         global BASEPATH_RAW, BASEPATH_ADV
 
         if self.mode.lower() == "single":
-            for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic_intention"]:
-                ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
+            for node_type in ALL_CATEGORIES:
+                ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
                 yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, ntype=node_type, **self.adv_corr)
 
-            for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_function", "logic2_function", "logic1_intention", "logic2_intention"]:
+            for node_type in ALL_CATEGORIES:
                 ofile_common_path = os.path.join(BASEPATH_ADV, "{}commonpath_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
                 yield CommonPathTask(ntype=node_type, interval=self.interval, ofile=ofile_common_path)
         elif self.mode.lower() == "range":
+            ifiles_community_detection = []
+
             for date in self.interval:
                 interval = d.Date.parse(str(date))
 
@@ -136,21 +159,15 @@ class AdvancedTask(luigi.Task):
                     yield RetentionTask(date=(self.interval.date_b-datetime.timedelta(days=self.trackday)), ofile=ofile_retention_path, **self.adv_retention)
 
                 ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
-                ofile = os.path.join(BASEPATH_STATS, "nal_{}.tsv.gz".format(str(date)))
-                yield NALTask(ifile=ifile, ofile=ofile)
 
                 ofile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(str(date)))
                 yield CookieHistoryTask(ifile=ifile, ofile=ofile)
 
+                ofile = os.path.join(BASEPATH_STATS, "interval_{}.tsv.gz".format(str(date)))
+                yield IntervalTask(ifile=ifile, ofile=ofile)
+
                 ofile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
                 yield MappingTask(ifile=ifile, ofile=ofile)
-
-                ifiles = []
-                for hour in range(0, 24):
-                    ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
-
-                ofile = os.path.join(BASEPATH_TABLEAU, "page_{}.tsv.gz".format(str(date)))
-                yield TableauPageTask(ifiles=ifiles, ofile=ofile)
 
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:
@@ -182,9 +199,9 @@ class RDBTask(luigi.Task):
                 table = "stats_{}".format(stats_type)
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-            for node_type in ["logic1", "logic2", "function", "intention"]:
-                ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
-                ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type, self.interval))
+            for node_type in ALL_CATEGORIES:
+                ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
+                ofile = os.path.join(BASEPATH_DB, "{}corr_{}.tsv.gz".format(node_type.replace("_", ""), self.interval))
 
                 table = "adv_pagecorr"
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
@@ -248,3 +265,27 @@ class RDBTask(luigi.Task):
                     yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
         else:
             raise NotImplementedError
+
+class CMSTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        global BASEPATH_TEMP, BASEPATH_RAW, BASEPATH_CLUSTER, BASEPATH_TAG
+
+        ofile = os.path.join(BASEPATH_CLUSTER, "communityunion_{}.dot".format(str(self.interval)))
+        yield CommunityDetectionTask(interval=self.interval, ofile=ofile)
+
+        for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention"]:
+            ofile = os.path.join(BASEPATH_CLUSTER, "categoryunion{}_{}.dot".format(node, str(self.interval)))
+            yield CategoryDetectionTask(interval=self.interval, node=node, ofile=ofile)
+
+        ifiles = []
+        for date in self.interval:
+            interval = d.Date.parse(str(date))
+            ifiles.append(os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date))))
+
+        for tagtype in [LOGIC, INTENTION]:
+            ofile = os.path.join(BASEPATH_TAG, "{}_{}.tsv.gz".format(tagtype, str(interval)))
+            yield TagOutputTask(ifiles=ifiles, ofile=ofile, tagtype=tagtype)

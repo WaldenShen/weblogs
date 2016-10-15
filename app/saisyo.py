@@ -65,7 +65,8 @@ class ClickstreamFirstRaw(luigi.Task):
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
-        sql_2 = "SELECT sessionnumber, MAX(CookieUniqueVisitorTrackingId) FROM VP_OP_ADC.visitor{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(table=table, date=self.date, hour="{:02d}".format(self.hour))
+        date_1 = datetime.datetime.strptime("{} {}".format(str(self.date), self.hour), "%Y-%m-%d %H") - datetime.timedelta(hours=1)
+        sql_2 = "SELECT sessionnumber, MAX(CookieUniqueVisitorTrackingId) FROM VP_OP_ADC.visitor{table} WHERE eventtimestamp >= '{date_1}' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(table=table, date_1=date_1, date=self.date, hour="{:02d}".format(self.hour))
         logger.info(sql_2)
 
         cursor.execute(sql_2)
@@ -75,12 +76,12 @@ class ClickstreamFirstRaw(luigi.Task):
                 if session_number in results:
                     for idx in range(0, len(results[session_number])):
                         results[session_number][idx][0] = cookie_id
-                else:
-                    logger.warn("The cookie_id({}) does NOT exist in results based on session_id({})".format(cookie_id, session_number))
+                #else:
+                #    logger.warn("The cookie_id({}) does NOT exist in results based on session_id({})".format(cookie_id, session_number))
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
-        sql_3 = "SELECT sessionnumber, MAX(ProfileUiid) FROM VP_OP_ADC.individual{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59' GROUP BY sessionnumber".format(table=table, date=self.date, hour="{:02d}".format(self.hour))
+        sql_3 = "SELECT sessionnumber, MAX(ProfileUiid) FROM VP_OP_ADC.individual{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59' AND ProfileUiid NOT LIKE '%XXXX%' GROUP BY sessionnumber".format(table=table, date=self.date, hour="{:02d}".format(self.hour))
         logger.info(sql_3)
 
         cursor.execute(sql_3)
@@ -95,7 +96,8 @@ class ClickstreamFirstRaw(luigi.Task):
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
-        sql_4 = "SELECT sessionnumber, DeviceIPAddress FROM VP_OP_ADC.sessionstart{table} WHERE eventtimestamp >= '{date} {hour}:00:00' AND eventtimestamp < '{date} {hour}:59:59'".format(table=table, date=self.date, hour="{:02d}".format(self.hour))
+        sql_4 = "SELECT sessionnumber, DeviceIPAddress FROM VP_OP_ADC.sessionstart{table} WHERE eventtimestamp >= '{date_1}' AND eventtimestamp < '{date} {hour}:59:59'".format(table=table, date_1=date_1, date=self.date, hour="{:02d}".format(self.hour))
+
         logger.info(sql_4)
 
         cursor.execute(sql_4)
@@ -105,17 +107,23 @@ class ClickstreamFirstRaw(luigi.Task):
                 if session_number in results:
                     for idx in range(0, len(results[session_number])):
                         results[session_number][idx][-1] = ip
-                else:
-                    logger.warn("The ip({}) does NOT exist in results based on session_id({})".format(ip, session_number))
+                #else:
+                #    logger.warn("The ip({}) does NOT exist in results based on session_id({})".format(ip, session_number))
             except UnicodeEncodeError as e:
                 logger.warn(e)
 
         with self.output().open('wb') as out_file:
-            out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
+            try:
+                out_file.write(bytes("{}\n".format(SEP.join(self.columns.split(","))), ENCODE_UTF8))
+            except:
+                out_file.write("{}\n".format(SEP.join(self.columns.split(","))))
 
             for session_id, info in results.items():
                 for row in info:
-                    out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
+                    try:
+                        out_file.write(bytes("{}\n".format(SEP.join(str(r) for r in [session_id] + row)), ENCODE_UTF8))
+                    except:
+                        out_file.write(("{}\n".format(SEP.join(r.encode(ENCODE_UTF8) if (isinstance(r, str) or isinstance(r, unicode)) else str(r) for r in [session_id] + row))))
 
         # close connection
         connection.close()
@@ -126,6 +134,7 @@ class ClickstreamFirstRaw(luigi.Task):
 
 class RawPath(luigi.Task):
     task_namespace = "clickstream"
+    prior = luigi.IntParameter(default=10)
 
     columns = luigi.Parameter(default="session_id,cookie_id,individual_id,session_seq,url,creation_datetime,duration,active_duration,loading_time,ip")
     ofile = luigi.Parameter()
@@ -134,6 +143,10 @@ class RawPath(luigi.Task):
     hour = luigi.IntParameter(default=-1)
 
     ntype = luigi.Parameter(default="url")
+
+    @property
+    def priority(self):
+        return self.prior
 
     def requires(self):
         global BASEPATH_TEMP

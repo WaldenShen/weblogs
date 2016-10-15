@@ -1,4 +1,5 @@
 #/usr/bin/python
+# coding=UTF-8
 
 import os
 import gzip
@@ -6,8 +7,8 @@ import json
 import luigi
 import datetime
 
-from utils import ENCODE_UTF8, SEP
-from utils import load_behaviors, create_behavior_db, norm_str
+from utils import ENCODE_UTF8, SEP, INTERVAL
+from behavior import load_interval
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
@@ -26,6 +27,8 @@ class VizTask(luigi.Task):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
 class VizRetentionTask(VizTask):
+    task_namespace = "clickstream"
+
     def run(self):
         global BASEPATH_ADV
 
@@ -49,28 +52,26 @@ class VizRetentionTask(VizTask):
                 except:
                     out_file.write("'{}': [{}],\n".format(login_datetime, ",".join([str(c) for c in results[login_datetime]])))
 
-class VizNALTask(luigi.Task):
-    date = luigi.DateParameter(default=datetime.datetime.now())
+class VizIntervalTask(VizTask):
+    ifile = luigi.Parameter(default=None)
 
     def run(self):
-        create_behavior_db(self.ifile)
-        logger.info("Insert records from {} into REDIS".format(self.ifile))
-
         with self.output().open("wb") as out_file:
-            out_file.write("KEY{sep}SUBKEY{sep}VALUE\n".format(sep=SEP))
+            out_file.write("分類{sep}子分類{sep}間隔\n".format(sep=SEP))
 
-            for key, behaviors in load_behaviors():
-                for name, behavior in behaviors.items():
-                    if isinstance(behavior, int):
-                        out_file.write("{}\n".format(SEP.join([key, name, str(behavior)])))
-                    else:
-                        for k, v in behavior.items():
-                            try:
-                                out_file.write(bytes("{}\n".format(SEP.join([key, k, str(v)])), ENCODE_UTF8))
-                            except:
-                                out_file.write("{}{}".format(SEP.join([key]), SEP))
-                                out_file.write(k.encode(ENCODE_UTF8))
-                                out_file.write("{}{}\n".format(SEP, v))
+            for cookie_id, info in load_interval():
+                if info[INTERVAL][1] > 0:
+                    interval = float(info[INTERVAL][0]) / info[INTERVAL][1] / 86400
+
+                    for category_type, category in info.items():
+                        if category_type != INTERVAL:
+                            max_name, max_value = None, -1
+                            for name, value in category.items():
+                                if name not in [u"首頁", u"其他"] and value > max_value:
+                                    max_value, max_name = value, name
+
+                        if max_name:
+                            out_file.write("{}{sep}{}{sep}{}\n".format(category_type, max_name.encode(ENCODE_UTF8), interval, sep=SEP))
 
 '''
 INPUT
@@ -120,4 +121,3 @@ class VizCorrelationTask(luigi.Task):
                     else:
                         o = json.loads(line.decode(ENCODE_UTF8).strip())
                         node_start, node_end, percentage = o["url_start"], o["url_end"], o["percentage"]
-                        

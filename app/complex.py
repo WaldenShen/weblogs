@@ -8,18 +8,29 @@ import json
 import redis
 import luigi
 import logging
-from datetime import datetime
 
+import networkx as nx
+import pygraphviz
+
+from networkx.drawing.nx_agraph import write_dot, read_dot
+
+from datetime import datetime
 from saisyo import RawPath
 from advanced.page import suffix_tree
-from utils import get_date_type, parse_datetime, load_cookie_history, save_cookie_history, parse_raw_page, is_app_log, norm_str
-from utils import SEP, NEXT, ENCODE_UTF8, FUNCTION, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
+
+from utils import get_date_type, parse_datetime, parse_raw_page, is_app_log, norm_str, norm_category, is_uncategorized_key
+from behavior import save_cookie_interval, load_cookie_history, save_cookie_history, create_cookie_history
+
+from utils import SEP, NEXT, ENCODE_UTF8, UNKNOWN, INTERVAL
+from utils import ALL_CATEGORIES,LOGIC, LOGIC1, LOGIC2, FUNCTION, INTENTION
 
 logger = logging.getLogger('luigi-interface')
 
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
-
+BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
+BASEPATH_CLUSTER = os.path.join(BASEPATH, "data", "cluster")
+BASEPATH_TEMP = os.path.join(BASEPATH, "data", "temp")
 
 class CommonPathTask(luigi.Task):
     task_namespace = "clickstream"
@@ -113,15 +124,21 @@ class RetentionTask(luigi.Task):
 
 class NALTask(luigi.Task):
     task_namespace = "clickstream"
+    prior = luigi.IntParameter(default=0)
 
     ifile = luigi.Parameter()
     ofile = luigi.Parameter()
 
+    @property
+    def priority(self):
+        return self.prior
+
     def run(self):
         creation_datetime, date_type = get_date_type(self.output().fn)
 
-        results = {"creation_datetime": creation_datetime, "count_new_pv": 0, "count_old_pv": 0, "count_new_uv": 0, "count_old_uv": 0}
+        create_cookie_history(self.ifile)
 
+        results = {"creation_datetime": creation_datetime, "count_new_pv": 0, "count_old_pv": 0, "count_new_uv": 0, "count_old_uv": 0}
         with gzip.open(self.ifile) as in_file:
             for line in in_file:
                 o = json.loads(line.decode(ENCODE_UTF8).strip())
@@ -144,7 +161,7 @@ class NALTask(luigi.Task):
                         results["count_new_pv"] += sum([c for c in o[FUNCTION].values()])
                         results["count_new_uv"] += 1
                 else:
-                    logger.warn("Not found {}".format(cookie_id))
+                    #logger.warn("Not found {}".format(cookie_id))
 
                     results["count_new_pv"] += sum([c for c in o[FUNCTION].values()])
                     results["count_new_uv"] += 1
@@ -157,58 +174,19 @@ class NALTask(luigi.Task):
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
-class TableauPageTask(luigi.Task):
-    task_namespace = "clickstream"
-
-    ifiles = luigi.ListParameter()
-    ofile = luigi.Parameter()
-
-    def run(self):
-        global ENCODE_UTF8
-
-        with self.output().open("wb") as out_file:
-            out_file.write("{}\n".format(SEP.join(["cookie_id", "individual_id", "creation_datetime", "product1", u"product2", "function", "intention", "product" , "product1_function", "product2_function", "product1_intention", "product2_intention"])))
-
-            for filepath in self.ifiles:
-                with gzip.open(filepath, "rb") as in_file:
-                    is_header = True
-                    for line in in_file:
-                        if is_header:
-                            is_header = False
-                        else:
-                            session_id, cookie_id, individual_id, url, creation_datetime,\
-                            logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
-                            duration, active_duration, loading_duration = parse_raw_page(line)
-
-                            if is_app_log(url):
-                                continue
-
-                            terms = [cookie_id, individual_id, creation_datetime, logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention]
-                            for idx, term in enumerate(terms):
-                                try:
-                                    out_file.write(norm_str(term))
-                                except UnicodeEncodeError as e:
-                                    out_file.write("UnicodeEncodeError")
-
-                                if idx < len(terms)-1:
-                                    out_file.write(SEP)
-
-                            out_file.write("{}\n".format(SEP.join([str(duration), str(active_duration), str(loading_duration)])))
-
-                logger.info("finish {}".format(filepath))
-
-
-    def output(self):
-        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
-
 class CookieHistoryTask(luigi.Task):
     task_namespace = "clickstream"
+    prior = luigi.IntParameter(default=0)
 
     ifile = luigi.Parameter()
     ofile = luigi.Parameter()
 
+    @property
+    def priority(self):
+        return self.prior
+
     def run(self):
-        global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, COUNT, UNKNOWN
+        global ENCODE_UTF8, UNKNOWN, ALL_CATEGORIES
 
         with self.output().open("wb") as out_file:
             with gzip.open(self.ifile, "rb") as in_file:
@@ -217,15 +195,10 @@ class CookieHistoryTask(luigi.Task):
                     profile_id, cookie_id, creation_datetime = o["individual_id"], o["cookie_id"], parse_datetime(o["creation_datetime"])
                     creation_datetime = creation_datetime.replace(microsecond=0)
 
-                    logic1, logic2, function, intention = o[LOGIC1], o[LOGIC2], o[FUNCTION], o[INTENTION]
-
                     history = load_cookie_history(cookie_id)
                     if history:
-                        first_datetime, pre_datetime = None, None
-                        for idx, login_datetime in enumerate([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history]):
-                            if first_datetime is None:
-                                first_datetime = login_datetime
-
+                        pre_datetime = None
+                        for idx, login_datetime in enumerate(sorted([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history])):
                             diff_seconds = 0
                             if pre_datetime is not None:
                                 diff_seconds = (login_datetime - pre_datetime).total_seconds()
@@ -233,35 +206,78 @@ class CookieHistoryTask(luigi.Task):
                             if creation_datetime == login_datetime:
                                 key = "TIME_{}".format(idx+1)
 
-                                for subkey, values in zip([LOGIC1, LOGIC2, FUNCTION, INTENTION], [logic1, logic2, function, intention]):
-                                    tc, total_count = 0, 0
-                                    for name, value in values.items():
-                                        if UNKNOWN not in name and name.find(u"其他") == -1:
-                                            total_count += value
+                                for subkey in ALL_CATEGORIES:
+                                    values = o[subkey]
 
-                                        tc += value
+                                    total_count = sum([0 if is_uncategorized_key(k) else v for k, v in values.items()])
 
-                                    for name, value in values.items():
-                                        name = name.replace(" ", "").replace(u"投資理財", u"理財投資")
+                                    if total_count > 0:
+                                        for name, value in values.items():
+                                            if not is_uncategorized_key(name):
+                                                name = norm_category(name)
 
-                                        results = {"individual_id": profile_id,
-                                                   "cookie_id": cookie_id,
-                                                   "category_type": subkey,
-                                                   "times": idx+1,
-                                                   "creation_datetime": login_datetime.strftime("%Y-%m-%d %H:%M:%S"),
-                                                   "first_interval": (login_datetime-first_datetime).total_seconds(),
-                                                   "prev_interval": diff_seconds,
-                                                   "category_key": norm_str(name),
-                                                   "category_value": value,
-                                                   "total_count1": tc,
-                                                   "total_count2": total_count}
+                                                results = {"individual_id": profile_id,
+                                                           "cookie_id": cookie_id,
+                                                           "category_type": subkey,
+                                                           "times": idx+1,
+                                                           "creation_datetime": login_datetime.strftime("%Y-%m-%d %H:%M:%S"),
+                                                           "prev_interval": diff_seconds,
+                                                           "category_key": norm_str(name),
+                                                           "category_value": value,
+                                                           "total_count": total_count}
 
-                                        out_file.write("{}\n".format(json.dumps(results)))
+                                                out_file.write("{}\n".format(json.dumps(results)))
                                 break
 
                             pre_datetime = login_datetime
-                    else:
-                        logger.warn("Not found {} in 'login' database in {}".format(cookie_id, self.ifile))
+                    #else:
+                    #    logger.warn("Not found {} in 'login' database in {}".format(cookie_id, self.ifile))
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class IntervalTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+
+    def requires(self):
+        global BASEPATH_STATS
+        creation_datetime, _ = get_date_type(self.ifile)
+        ofile = os.path.join(BASEPATH_STATS, "cookiehistory_{}.tsv.gz".format(creation_datetime))
+
+        logger.info((self.ifile, ofile))
+
+        yield CookieHistoryTask(ifile=self.ifile, ofile=ofile)
+
+    def run(self):
+        global ENCODE_UTF8, LOGIC1, LOGIC2, FUNCTION, INTENTION, ALL_CATEGORIES, INTERVAL
+
+        results = {}
+        for input in self.input():
+            with input.open("rb") as in_file:
+                for line in in_file:
+                    o = json.loads(line.decode(ENCODE_UTF8).strip())
+
+                    cookie_id, total_count2 = o["cookie_id"], o["total_count"]
+                    category_type, category_key, category_value = o["category_type"], o["category_key"], o["category_value"]
+                    prev_interval = o["prev_interval"]
+
+                    if total_count2 > 0:
+                        results.setdefault(cookie_id, {}).setdefault(category_type, {}).setdefault(category_key, category_value)
+                        results[cookie_id][INTERVAL] = [0, 0]
+                        results[cookie_id][INTERVAL][0] += prev_interval
+
+                        if prev_interval > 0:
+                            results[cookie_id][INTERVAL][1] += 1
+
+        with self.output().open("wb") as out_file:
+            for cookie_id, record in results.items():
+                save_cookie_interval(cookie_id, record)
+
+                record["cookie_id"] = cookie_id
+                out_file.write("{}\n".format(json.dumps(record)))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
@@ -285,3 +301,255 @@ class MappingTask(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class CategoryDetectionRawTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifiles = luigi.ListParameter()
+    ofile = luigi.Parameter()
+
+    node = luigi.Parameter()
+
+    def add_edge(self,g, nodes, durations):
+        for i, node_start in enumerate(nodes):
+            for ii, node_end in enumerate(nodes[i+1:]):
+                if node_start != node_end:
+                    durations[i+1] /= 1000
+
+                    if durations[i+1] < 10:
+                        weight = 0.25
+                    else:
+                        weight = 0.5 + min(0.5, 0.5*(float(durations[i+ii])/60/2))
+
+                    if g.has_edge(node_start, node_end):
+                        g[node_start][node_end]["weight"] += weight
+                    else:
+                        g.add_weighted_edges_from([(node_start, node_end, weight)])
+
+    def run(self):
+        global ENCODE_UTF8
+        global LOGIC, LOGIC1, LOGIC2, FUNCTION, INTENTION
+
+        g = nx.Graph()
+        for filepath in self.ifiles:
+            with gzip.open(filepath, "rb") as in_file:
+                is_header = True
+
+                nodes = []
+                durations = []
+                pre_session_id, pre_logic = None, None
+                for line in in_file:
+                    if is_header:
+                        is_header = False
+                    else:
+                        info = parse_raw_page(line)
+                        if info is None:
+                            continue
+
+                        session_id, cookie_id, individual_id, url, creation_datetime,\
+                        logic1, logic2, function, intention, logic, logic1_function, logic2_function, logic1_intention, logic2_intention,\
+                        duration, active_duration, loading_duration = info
+
+                        if pre_session_id is not None and pre_session_id != session_id:
+                            self.add_edge(g, nodes, durations)
+
+                            nodes = []
+                            durations = []
+
+                        key = None
+                        if self.node == LOGIC1:
+                            key = logic1
+                        elif self.node == LOGIC:
+                            key = logic
+                        elif self.node == INTENTION:
+                            key = intention
+                        elif self.node == FUNCTION:
+                            key = function
+                        elif self.node == "logic1_intention":
+                            key = logic1_intention
+
+                        if not is_uncategorized_key(key.decode(ENCODE_UTF8)):
+                            nodes.append(norm_str(key).replace('"', "").decode(ENCODE_UTF8))
+                            durations.append(active_duration)
+
+                        pre_session_id, pre_logic = session_id, key
+
+            self.add_edge(g, nodes, durations)
+            logger.info("Finish {} with {}, and the size of graph is ({}, {})".format(filepath, self.node, g.number_of_nodes(), g.number_of_edges()))
+
+        folder = os.path.dirname(self.output().fn)
+        if not os.path.isdir(folder):
+            os.makedirs(folder)
+
+        write_dot(g, self.output().fn)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
+
+class CategoryDetectionTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ofile = luigi.Parameter()
+
+    interval = luigi.DateIntervalParameter()
+    node = luigi.Parameter()
+
+    def requires(self):
+        global BASEPATH_TEMP
+        global BASEPATH_CLUSTER
+
+        for date in self.interval:
+            ifiles = []
+            for hour in range(0, 24):
+                ifiles.append(os.path.join(BASEPATH_TEMP, "page_{}_{:02d}.tsv.gz".format(str(date), hour)))
+
+            ofile = os.path.join(BASEPATH_CLUSTER, "category{}_{}.dot".format(self.node, str(date)))
+            yield CategoryDetectionRawTask(node=self.node, ifiles=ifiles, ofile=ofile)
+
+    def run(self):
+        g = nx.Graph()
+
+        for input in self.input():
+            sub_g = nx.Graph(read_dot(input.fn))
+            g.add_edges_from(combined_graphs_edges(g, sub_g))
+            g.add_nodes_from(g.nodes(data=True) + sub_g.nodes(data=True))
+
+            logger.info("Finish {}, and the size of graph is ({}, {})".format(input.fn, g.number_of_nodes(), g.number_of_edges()))
+
+        write_dot(g, self.output().fn)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
+
+class CommunityDetectionRawTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ifiles = luigi.ListParameter()
+    ofile = luigi.Parameter()
+
+    bvisits = luigi.IntParameter(default=5)
+    tvisits = luigi.IntParameter(default=10)
+
+    def run(self):
+        global ENCODE_UTF8
+        global LOGIC, LOGIC1, LOGIC2, FUNCTION, INTENTION
+
+        g = nx.Graph()
+        for filepath in self.ifiles:
+            with gzip.open(filepath, "rb") as in_file:
+                is_header = True
+
+                for line in in_file:
+                    if is_header:
+                        is_header = False
+                    else:
+                        o = json.loads(line.decode(ENCODE_UTF8).strip())
+                        cookie_id = o["cookie_id"].replace('"', '')
+                        dates = load_cookie_history(cookie_id)
+                        if len(dates) < self.bvisits:
+                            continue
+
+                        if cookie_id != "cookie_id":
+                            history = load_cookie_history(cookie_id)
+                            for idx, login_datetime in enumerate(sorted([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history])):
+                                if login_datetime.strftime("%Y-%m-%d") == str(o["creation_datetime"].split(" ")[0]):
+                                    break
+
+                            if idx+1 < self.bvisits:
+                                continue
+
+                            products, intentions = o[LOGIC1], o[INTENTION]
+                            total_count = sum([c for c in products.values()])
+
+                            for shape, item in zip(["triangle", "box"], [products, intentions]):
+                                for k, v in item.items():
+                                    k, v = norm_str(k), float(v)/total_count
+
+                                    if not is_uncategorized_key(k) and k != "myb2b" and k.find("cub") == -1 and k.find("b2b") == -1 and k.find(u"網銀") == -1 and k.find(u"集團公告") == -1 and k.find(u"選單") == -1:
+                                        if not g.has_node(cookie_id):
+                                            g.add_node(cookie_id, shape="circle")
+
+                                        if not g.has_node(k):
+                                            g.add_node(k, shape=shape)
+
+                                        if g.has_edge(cookie_id, k):
+                                            g[cookie_id][k]["weight"] += v
+                                        else:
+                                            g.add_weighted_edges_from([(cookie_id, k, v)])
+
+            logger.info("Finish {}, and the size of graph is ({}, {})".format(filepath, g.number_of_nodes(), g.number_of_edges()))
+
+        folder = os.path.dirname(self.output().fn)
+        if not os.path.isdir(folder):
+            os.makedirs(folder)
+
+        write_dot(g, self.output().fn)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
+
+class CommunityDetectionTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ofile = luigi.Parameter()
+
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        for date in self.interval:
+            ifiles = [os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))]
+            ofile = os.path.join(BASEPATH_CLUSTER, "community_{}.dot".format(str(date)))
+            yield CommunityDetectionRawTask(ifiles=ifiles, ofile=ofile)
+
+    def run(self):
+        g = nx.Graph()
+
+        for input in self.input():
+            #union_graph = nx.compose(union_graph, nx.Graph(read_dot(input.fn)))
+            sub_g = nx.Graph(read_dot(input.fn))
+            g.add_edges_from(combined_graphs_edges(g, sub_g))
+            g.add_nodes_from(g.nodes(data=True) + sub_g.nodes(data=True))
+            logger.info("Finish {}, and the size of graph is ({}, {})".format(input.fn, g.number_of_nodes(), g.number_of_edges()))
+
+        write_dot(g, self.output().fn)
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
+
+def combined_graphs_edges(G, H, weight = 1.0):
+    for u,v,hdata in H.edges_iter(data=True):
+        # multply attributes of H by weight
+        attr = dict( (key, float(value)*weight) for key,value in hdata.items())
+
+        # get data from G or use empty dict if no edge in G
+        gdata = {}
+        if G.has_node(u):
+            gdata = G[u].get(v,{})
+
+        # add data from g
+        # sum shared items
+        shared = set(gdata) & set(hdata)
+        attr.update(dict((key, attr[key] + float(gdata[key])) for key in shared))
+
+        # non shared items
+        non_shared = set(gdata) - set(hdata)
+        attr.update(dict((key, gdata[key]) for key in non_shared))
+
+        yield u, v, attr
+
+if __name__ == "__main__":
+    a = nx.Graph(read_dot("dot1.dot"))
+    b = nx.Graph(read_dot("dot2.dot"))
+
+    for g in [a, b]:
+        for node in g.nodes():
+            print g[node]
+
+        print
+
+    print list(combined_graphs_edges(a, b, weight=1))
+
+    g = nx.Graph()
+    g.add_edges_from(combined_graphs_edges(a, b, weight=1))
+    for node in g.nodes():
+        print g[node]
