@@ -427,8 +427,8 @@ class CommunityDetectionRawTask(luigi.Task):
     ifiles = luigi.ListParameter()
     ofile = luigi.Parameter()
 
-    uvisits = luigi.IntParameter(default=5)
-    lvisits = luigi.IntParameter(default=10)
+    bvisits = luigi.IntParameter(default=5)
+    tvisits = luigi.IntParameter(default=10)
 
     def run(self):
         global ENCODE_UTF8
@@ -446,16 +446,16 @@ class CommunityDetectionRawTask(luigi.Task):
                         o = json.loads(line.decode(ENCODE_UTF8).strip())
                         cookie_id = o["cookie_id"].replace('"', '')
                         dates = load_cookie_history(cookie_id)
-                        if len(dates) < self.lvisits and len(dates) > self.uvisits:
+                        if len(dates) < self.bvisits:
                             continue
 
                         if cookie_id != "cookie_id":
                             history = load_cookie_history(cookie_id)
                             for idx, login_datetime in enumerate(sorted([datetime.strptime(d, "%Y-%m-%d %H:%M:%S") for d in history])):
-                                if login_datetime == o["creation_datetime"]:
+                                if login_datetime.strftime("%Y-%m-%d") == str(o["creation_datetime"].split(" ")[0]):
                                     break
 
-                            if idx+1 < self.lvisits and idx+1 > self.uvisits:
+                            if idx+1 < self.bvisits:
                                 continue
 
                             products, intentions = o[LOGIC1], o[INTENTION]
@@ -493,14 +493,13 @@ class CommunityDetectionTask(luigi.Task):
 
     ofile = luigi.Parameter()
 
-    visits = luigi.IntParameter(default=3)
     interval = luigi.DateIntervalParameter()
 
     def requires(self):
         for date in self.interval:
             ifiles = [os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))]
             ofile = os.path.join(BASEPATH_CLUSTER, "community_{}.dot".format(str(date)))
-            yield CommunityDetectionRawTask(visits=self.visits, ifiles=ifiles, ofile=ofile)
+            yield CommunityDetectionRawTask(ifiles=ifiles, ofile=ofile)
 
     def run(self):
         g = nx.Graph()
