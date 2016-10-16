@@ -10,8 +10,8 @@ import datetime
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
 from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, CookieHistoryTask
-from community import CommunityDetectionTask, HabitDetectionTask, MemberDetectionTask
-from tag import TagOutputTask, MappingTask
+from cluster.community import CommunityDetectionTask, HabitDetectionTask, MemberDetectionTask
+from cms.tag import TagOutputTask, MappingTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
