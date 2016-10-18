@@ -11,7 +11,7 @@ from rdb import TeradataTable
 logger = logging.getLogger('luigi-interface')
 logger.setLevel(logging.INFO)
 
-BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
+BASEPATH = "{}/../..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_TERADATA = os.path.join(BASEPATH, "data", "teradata")
 
 
