@@ -2,6 +2,7 @@
 # coding=UTF-8
 
 import os
+import re
 import gzip
 import json
 import luigi
@@ -183,11 +184,13 @@ class MemberDetectionRawTask(luigi.Task):
     ifiles = luigi.ListParameter()
     ofile = luigi.Parameter()
 
+    ntype = luigi.Parameter()
+
     def run(self):
         global ENCODE_UTF8
         global LOGIC, LOGIC1, LOGIC2, FUNCTION, INTENTION
 
-        relations = {LOGIC1: {}, LOGIC: {}, LOGIC2: {}, INTENTION: {}, "logic1_intention": {}}
+        relations = {}
         for filepath in self.ifiles:
             with gzip.open(filepath, "rb") as in_file:
                 is_header = True
@@ -201,34 +204,23 @@ class MemberDetectionRawTask(luigi.Task):
                         if cookie_id == "cookie_id":
                             continue
 
-                        for node in [LOGIC1, LOGIC2, LOGIC, INTENTION, "logic1_intention"]:
-                            item = o[node]
-                            total_count = sum([c for c in item.values()])
+                        item = o[self.ntype]
 
-                            for k, v in item.items():
-                               if not is_uncategorized_key(k) and k != "myb2b" and k.find("cub") == -1 and k.find("b2b") == -1 and k.find(u"網銀") == -1 and k.find(u"集團公告") == -1 and k.find(u"選單") == -1:
-                                    if float(v)/total_count > 0.3:
-                                        #logger.info((cookie_id, k, float(v), total_count, float(v) / total_count))
-                                        relations[node].setdefault(k, set()).add(cookie_id)
+                        for k, v in item.items():
+                           if not is_uncategorized_key(k) and k != "myb2b" and k.find("cub") == -1 and k.find("b2b") == -1 and k.find(u"網銀") == -1 and k.find(u"集團公告") == -1 and k.find(u"選單") == -1:
+                                if v > 3:
+                                    relations.setdefault(k, set()).add(cookie_id)
 
         logger.info("There are {} relations to build this graph".format(len(relations)))
 
-        r = {}
-        for node, info in relations.items():
-            logger.info("Start to merge nodes by {}".format(node))
-
-            for k, members in info.items():
-                members = list(members)
-                for i, node_start in enumerate(members):
-                    for ii, node_end in enumerate(members[i+1:]):
-                        key = '"{}" -- "{}"'.format(node_start.encode(ENCODE_UTF8), node_end.encode(ENCODE_UTF8))
-                        r.setdefault(key, 0)
-                        r[key] += 1
-
         with self.output().open("wb") as out_file:
             out_file.write("strict graph {\n")
-            for k, v in r.items():
-                out_file.write("\t{}\t[weight={}];\n".format(k, v))
+            for k, members in relations.items():
+                members = sorted(list(members))
+                for i, node_start in enumerate(members):
+                    for ii, node_end in enumerate(members[i+1:]):
+                        out_file.write('\t"{}" -- "{}"\t[weight=1];\n'.format(node_start, node_end, k))
+
             out_file.write("}")
 
     def output(self):
@@ -290,8 +282,32 @@ class MemberDetectionTask(CommunityMergedTask):
     def requires(self):
         for date in self.interval:
             ifiles = [os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))]
-            ofile = os.path.join(BASEPATH_CLUSTER, "member_{}.dot".format(str(date)))
-            yield MemberDetectionRawTask(ifiles=ifiles, ofile=ofile)
+
+            for node in [LOGIC1, LOGIC2, INTENTION, LOGIC, "logic1_intention"]:
+                ofile = os.path.join(BASEPATH_CLUSTER, "member{}_{}.dot".format(node, str(date)))
+                yield MemberDetectionRawTask(ntype=node, ifiles=ifiles, ofile=ofile)
+
+    def run(self):
+        edges = {}
+        for input in self.input():
+            with open(input.fn, "rb") as in_file:
+                for line in in_file:
+                    #group = re.match(r'\s([\"\-\w\d\s]+)\s\[weight=(\d+)\]', line.strip())
+                    group = re.match(r'\t([\"\-\w\d\s]+)\t\[weight=(\d+)\]', line)
+                    if group:
+                        node, weight = group.group(1), int(group.group(2))
+
+                        edges.setdefault(node, 0)
+                        edges[node] += weight
+                    else:
+                        logger.info((line, group))
+
+        with self.output().open("wb") as out_file:
+            out_file.write("strict graph {\n")
+            for edge, v in edges.items():
+                out_file.write('\t{}\t[weight={}]\n'.format(edge, v))
+
+            out_file.write("}\n")
 
 def combined_graphs_edges(G, H, weight = 1.0):
     for u,v,hdata in H.edges_iter(data=True):

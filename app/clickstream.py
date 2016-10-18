@@ -10,8 +10,9 @@ import datetime
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
 from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, CookieHistoryTask
-from community import CommunityDetectionTask, HabitDetectionTask, MemberDetectionTask
-from tag import TagOutputTask, MappingTask
+from cluster.community import CommunityDetectionTask, HabitDetectionTask, MemberDetectionTask
+from cluster.model import LDATask
+from cms.tag import TagOutputTask, MappingTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
@@ -274,6 +275,7 @@ class ClusterTask(luigi.Task):
     def requires(self):
         global BASEPATH_CLUSTER
 
+        '''
         ofile = os.path.join(BASEPATH_CLUSTER, "communityunion_{}.dot".format(str(self.interval)))
         yield CommunityDetectionTask(interval=self.interval, ofile=ofile)
 
@@ -283,6 +285,15 @@ class ClusterTask(luigi.Task):
         for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention"]:
             ofile = os.path.join(BASEPATH_CLUSTER, "categoryunion{}_{}.dot".format(node, str(self.interval)))
             yield HabitDetectionTask(interval=self.interval, node=node, ofile=ofile)
+        '''
+
+        ifiles = []
+        for date in self.interval:
+            ifiles.append(os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date))))
+
+        for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention", "logic1#intention", "logic1#logic2#intention"]:
+            ofile = os.path.join(BASEPATH_CLUSTER, "lda{}_{}.topic.gz".format(node.replace("_", ""), str(self.interval)))
+            yield LDATask(ntype=node, ifiles=ifiles, ofile=ofile)
 
 class CMSTask(luigi.Task):
     task_namespace = "clickstream"
