@@ -38,7 +38,7 @@ class DayNADumpTask(luigi.Task):
         global BASEPATH_TERADATA
 
         sqls = ["SELECT CUSTOMER_ID, CUSTOMER_ID_MODIFIER, CR_EU_BANK_ACCT_IND, VIP_CODE FROM VP_MCIF.PARTY_CC",
-                "SELECT MCC_CODE, MCC_GROUP FROM VP_MCIF.RD_MIS_MCC_CODE",
+                "SELECT MCC_CODE, MCC_GROUP_CODE FROM VP_MCIF.RD_MIS_MCC_CODE",
                 "SELECT MCC_GROUP_CODE, MCC_GROUP_CODE_DESC FROM VP_MCIF.RD_MIS_MCC_GROUP_CODE",
                 "SELECT MERCHANT_ID, MERCHANT_NAME, CLASS_CODE FROM DP_MCIF_REF.RD_MIS_MERCHAINT_ID",
                 "SELECT AFFGROUP_CODE,CARD_TYPE_CODE,CARD_NAME,KIND_NAME,KIND1,KIND2,COMBO FROM VP_MCIF.RD_CC_CATHAY_CARD_TYPE",
@@ -71,7 +71,7 @@ class DayMonthDumpTask(luigi.Task):
         for osql, dump_past in sqls[:]:
             table = osql.split(" ")[-1]
 
-            for diff in [0, 30, 60, 90, 120, 150, 180]:
+            for diff in ([0, 30, 60, 90, 120, 150, 180] if dump_past else [0]):
                 month = datetime.datetime.strptime(self.today, "%Y-%m-%d") - datetime.timedelta(days=diff)
                 past = month.strftime("%Y%m")
 
