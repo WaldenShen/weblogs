@@ -9,9 +9,10 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, MappingTask, CookieHistoryTask
-from complex import CommunityDetectionTask, CategoryDetectionTask
-from tag import TagOutputTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, CookieHistoryTask
+from cluster.community import CommunityDetectionTask, HabitDetectionTask, MemberDetectionTask
+from cluster.model import LDATask
+from cms.tag import TagOutputTask, MappingTask
 from rdb import SqlliteTable
 from insert import InsertPageCorrTask
 
@@ -266,20 +267,41 @@ class RDBTask(luigi.Task):
         else:
             raise NotImplementedError
 
+class ClusterTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        global BASEPATH_CLUSTER
+
+        '''
+        ofile = os.path.join(BASEPATH_CLUSTER, "communityunion_{}.dot".format(str(self.interval)))
+        yield CommunityDetectionTask(interval=self.interval, ofile=ofile)
+
+        ofile = os.path.join(BASEPATH_CLUSTER, "member_{}.dot".format(str(self.interval)))
+        yield MemberDetectionTask(interval=self.interval, ofile=ofile)
+
+        for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention"]:
+            ofile = os.path.join(BASEPATH_CLUSTER, "categoryunion{}_{}.dot".format(node, str(self.interval)))
+            yield HabitDetectionTask(interval=self.interval, node=node, ofile=ofile)
+        '''
+
+        ifiles = []
+        for date in self.interval:
+            ifiles.append(os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date))))
+
+        for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention", "logic1#intention", "logic1#logic2#intention"]:
+            ofile = os.path.join(BASEPATH_CLUSTER, "lda{}_{}.topic.gz".format(node.replace("_", ""), str(self.interval)))
+            yield LDATask(ntype=node, ifiles=ifiles, ofile=ofile)
+
 class CMSTask(luigi.Task):
     task_namespace = "clickstream"
 
     interval = luigi.DateIntervalParameter()
 
     def requires(self):
-        global BASEPATH_TEMP, BASEPATH_RAW, BASEPATH_CLUSTER, BASEPATH_TAG
-
-        ofile = os.path.join(BASEPATH_CLUSTER, "communityunion_{}.dot".format(str(self.interval)))
-        yield CommunityDetectionTask(interval=self.interval, ofile=ofile)
-
-        for node in [LOGIC, LOGIC1, INTENTION, "logic1_intention"]:
-            ofile = os.path.join(BASEPATH_CLUSTER, "categoryunion{}_{}.dot".format(node, str(self.interval)))
-            yield CategoryDetectionTask(interval=self.interval, node=node, ofile=ofile)
+        global  BASEPATH_RAW, BASEPATH_TAG
 
         ifiles = []
         for date in self.interval:

@@ -24,8 +24,8 @@ class DumpAllTask(luigi.Task):
     def requires(self):
         yield DayNADumpTask(remove=self.remove)
         yield MonthMonthDumpTask(remove=self.remove, today=self.today)
-        yield YearYearDumpTask(remove=self.remove, today=self.today)
-        yield MonthYearDumpTask(remove=self.remove, today=self.today)
+        #yield YearYearDumpTask(remove=self.remove, today=self.today)
+        #yield MonthYearDumpTask(remove=self.remove, today=self.today)
 
         yield DayMonthDumpTask(remove=self.remove, today=self.today.strftime("%Y-%m-%d"))
 
@@ -37,20 +37,15 @@ class DayNADumpTask(luigi.Task):
     def requires(self):
         global BASEPATH_TERADATA
 
-        tables = ["VP_MCIF.PARTY_CC",
-                  "VP_MCIF.ACCT_INS_CATHAYLIFE",
-                  "VP_MCIF.ACCT_DRV_MF",
-                  "VP_MCIF.ACCT_INS_PROPERTY",
-                  "VP_MCIF.LOCATION_DRV",
-                  "VP_MCIF.RD_MIS_MCC_CODE",
-                  "VP_MCIF.RD_MIS_MCC_GROUP_CODE",
-                  "VP_MCIF.RD_MIS_MERCHAINT_ID",
-                  "VP_MCIF.RD_CC_CATHAY_CARD_TYPE",
-                  "VP_MCIF.EVENT_CC_AIRPORT_PARKING",
-                  "DP_MCIF_REF.RD_ABT_PROD_CODES"]
+        sqls = ["SELECT CUSTOMER_ID, CUSTOMER_ID_MODIFIER, CR_EU_BANK_ACCT_IND, VIP_CODE FROM VP_MCIF.PARTY_CC",
+                "SELECT MCC_CODE, MCC_GROUP FROM VP_MCIF.RD_MIS_MCC_CODE",
+                "SELECT MCC_GROUP_CODE, MCC_GROUP_CODE_DESC FROM VP_MCIF.RD_MIS_MCC_GROUP_CODE",
+                "SELECT MERCHANT_ID, MERCHANT_NAME, CLASS_CODE FROM VP_MCIF.RD_MIS_MERCHAINT_ID",
+                "SELECT AFFGROUP_CODE,CARD_TYPE_CODE,CARD_NAME,KIND_NAME,KIND1,KIND2,COMBO FROM VP_MCIF.RD_CC_CATHAY_CARD_TYPE",
+                "SELECT CUSTOMER_ID, CARD_TYPE, CARD_NBR, INSIDE_DATE, OUTSIDE_DATE FROM VP_MCIF.EVENT_CC_AIRPORT_PARKING"]
 
-        for table in tables:
-            sql = "SELECT * FROM {}".format(table)
+        for sql in sqls:
+            table = sql.split(" ")[-1]
             ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
 
             if self.remove and os.path.exists(ofile):
@@ -67,8 +62,9 @@ class DayMonthDumpTask(luigi.Task):
     def requires(self):
         global BASEPATH_TERADATA
 
-        sqls = ["SELECT * FROM VP_MCIF.PARTY_DRV",
-                "SELECT CUSTOMER_ID, CARD_TYPE_CATEGORY_CODE,CARD_TYPE_CODE,CARD_NBR,TXN_DATE,TXN_CODE,TXN_AMT,MERCHANT_NBR,MERCHANT_CATEGORY_CODE,MERCHANT_NAME,MERCHANT_LOCATION_CITY,MERCHANT_LOCATION_COUNTRY_CODE,ORIGINAL_CURRENCY_CODE,TXN_AMT_US_DOLLAR,PRIMARY_CARDHOLDER_IND,TREATY_CONV_AMT FROM VP_MCIF.EVENT_CC_TXN"]
+        sqls = ["SELECT CUSTOMER_ID,CUSTOMER_ID_MODIFIER,CARD_NBR,DOMICILE_BRANCH,CARD_TYPE_CODE,CARDHOLDER_CUST_ID,BLOCK_CODE,CLOSED_DATE,CREDIT_LIMIT,AVAILABLE_CARD_LIMIT,ACCT_OPEN_DATE,PRIMARY_CARD_IND FROM VP_MCIF.ACCT_CC_DAILY",
+                "SELECT CUSTOMER_ID, GENDER_TYPE_CODE,BIRTHDAY, CUSTOMER_ROLE_CODE, CUSTOMER_CLASS_CODE FROM VP_MCIF.PARTY_DRV",
+                "SELECT CUSTOMER_ID,CARD_TYPE_CATEGORY_CODE,CARD_TYPE_CODE,CARD_NBR,TXN_DATE,TXN_CODE,TXN_AMT,MERCHANT_NBR,MERCHANT_CATEGORY_CODE,MERCHANT_NAME,MERCHANT_LOCATION_CITY,MERCHANT_LOCATION_COUNTRY_CODE,ORIGINAL_CURRENCY_CODE,TXN_AMT_US_DOLLAR,PRIMARY_CARDHOLDER_IND,TREATY_CONV_AMT FROM VP_MCIF.EVENT_CC_TXN"]
 
         done = set()
         for diff in [0, 30, 60, 90, 120, 150, 180]:
@@ -104,8 +100,8 @@ class MonthMonthDumpTask(luigi.Task):
     def requires(self):
         global BASEPATH_TERADATA
 
-        sqls = ["SELECT * FROM VP_MCIF.PARTY_DRV_VIP",
-                "SELECT * FROM VP_MCIF.PARTY_VA_BUCC_PROD_STAT"]
+        sqls = ["SELECT CUSTOMER_ID,AVG_SAV_CHK_BAL,AVG_TIME_BAL,AVG_FUND_BAL,INSURANCE_BAL,REITS_BAL,AVG_CITA_BAL,AVG_STR_BAL,AUM_RP_BAL,AUM_TRU_BAL FROM VP_MCIF.PARTY_DRV_VIP",
+                "SELECT CUSTOMER_ID,TXN_DATE,TXN_TYPE,CHANGE_BONUS_POINT,AFT_AVAILABLE_BONUS_POINT,TXN_MEMO FROM VP_MCIF.EVENT_FUND_JOURNAL_TXN"]
 
         first = self.today.replace(day=1)
         last_month = first - datetime.timedelta(days=1)
