@@ -7,15 +7,16 @@ import gzip
 import json
 import redis
 import luigi
+import operator
 import logging
-
+import math
 import networkx as nx
-import pygraphviz
+#import pygraphviz
 
 from networkx.drawing.nx_agraph import write_dot, read_dot
 
 from datetime import datetime
-from saisyo import RawPath
+from saisyo import RawPath, SimpleDynamicTask
 from advanced.page import suffix_tree
 
 from utils import get_date_type, parse_datetime, parse_raw_page, is_app_log, norm_str, norm_category, is_uncategorized_key
@@ -29,8 +30,13 @@ logger = logging.getLogger('luigi-interface')
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
+BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_CLUSTER = os.path.join(BASEPATH, "data", "cluster")
 
+URL_START = "url_start"
+URL_END = 'url_end'
+PERCENTAGE = 'percentage'
+GROUP = 'group'
 
 class CommonPathTask(luigi.Task):
     task_namespace = "clickstream"
@@ -470,3 +476,161 @@ class CommunityDetectionTask(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(self.ofile)
+
+class TaggingTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    ntype = luigi.Parameter()
+    ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+    interval = luigi.Parameter()
+
+    raw_cookie = luigi.DictParameter(default={"lib": "basic.raw.cookie", "mode": "dict"})
+
+    def requires(self):
+        ofile_raw_cookie = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(self.interval))
+        yield SimpleDynamicTask(interval=self.interval, filter_app=True, ofile=ofile_raw_cookie, **self.raw_cookie)
+
+    def run(self):
+        global ENCODE_UTF8
+        filter = ['其他', '未分類', '停止申辦']
+        with gzip.open(self.ifile, "rb") as in_file:
+            data = []
+            int_dict = dict()
+            for line in in_file:
+                j = json.loads(line.decode(ENCODE_UTF8).strip())
+                #NTYPE = [(value, key[key.find('_') + 1:]) for (key, value) in j[self.ntype].items() if max([line for line in map(key.find, filter)]) == -1]
+                NTYPE = [(k[1], k[0].split("_")[1]) for k in sorted(j[self.ntype].items(), key=operator.itemgetter(0), reverse=True)]
+                for line in NTYPE:
+                    tag = {'cookie_id': j['cookie_id'],
+                           self.ntype: line[1],
+                           'count': line[0]}
+                    data.append(tag)
+                    int_dict.setdefault(line[1], {}).setdefault(line[0], 0)
+                    int_dict[line[1]][line[0]] += 1
+
+            for k, v in int_dict.items():
+                total = sum(v.values())
+                add = 0
+                for num, count in sorted([(key, value) for (key, value) in v.items()]):
+                    add += count
+                    if add / total > 0.75:
+                        ranking = 3  # 'high'
+                    elif add / total < 0.25:
+                        ranking = 1  # 'low'
+                    else:
+                        ranking = 2  # 'mid'
+                    int_dict[k][num] = [add / total, ranking]
+
+        with self.output().open("wb") as out_file:
+            column = ['cookie_id', self.ntype, 'score', 'timestamp']
+            try:
+                out_file.write(bytes("{}\n".format("\t".join(column)), ENCODE_UTF8))
+            except:
+                out_file.write("{}\n".format("\t".join(column)))
+
+            for line in data:
+                if self.ntype != 'logic2' or (self.ntype =='logic2' and line[self.ntype].find(u"卡") > -1):
+                    tag = [line['cookie_id'],
+                           line[self.ntype],
+                           str(int_dict[line[self.ntype]][line['count']][1]),  # score
+                           str(self.interval)]  # timestamp
+                    try:
+                        out_file.write(bytes("{}\n".format("\t".join(tag)), ENCODE_UTF8))
+                    except:
+                        out_file.write("{}\n".format("\t".join([t.encode(ENCODE_UTF8) for t in tag])))
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+
+class D3CorrTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    dtype = luigi.Parameter()
+    ntype = luigi.Parameter()
+    ifile = luigi.Parameter()
+    ofile = luigi.Parameter()
+    interval = luigi.Parameter()
+
+    adv_corr = luigi.DictParameter(default={"lib": "advanced.page.correlation", "length": 4})
+
+    def requires(self):
+        ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(self.ntype, self.interval))
+        yield PageCorrTask(ofile=ofile_page_corr, interval=self.interval, ntype=self.ntype, **self.adv_corr)
+
+    def run(self):
+        global ENCODE_UTF8
+        results = []
+        filter = [u'exit', u'未分類', u'停止', u'其他', u'首頁',u'start']
+        pageset, groupset = set(), dict()
+
+        with gzip.open(self.ifile, "rb") as in_file:
+            for line in in_file:
+                d = json.loads(line.decode(ENCODE_UTF8).strip())
+                find_url_start = d[URL_START].find('_')
+                spl_url_start = d[URL_START].split('_')
+                find_url_end = d[URL_END].find('_')
+
+
+                if self.dtype == 'double':
+                    url_start = d[URL_START] if find_url_start == -1 else spl_url_start[3]
+                    url_end = d[URL_END] if find_url_end == -1 else d[URL_END].split('_')[3]
+                    group = d[URL_START] if find_url_start == -1 else spl_url_start[1]
+                else:
+                    url_start = d[URL_START][find_url_start + 1:]
+                    url_end = d[URL_END][find_url_end + 1:]
+                    group = 2
+                percentage = d[PERCENTAGE]
+                results.append({'url_start': url_start,
+                                'url_end': url_end,
+                                'percentage': percentage,
+                                'group': group})
+                if d[PERCENTAGE] >= 0.13 and max([line for line in map(url_start.find, filter)]) == -1 and max([line for line in map(url_end.find, filter)]) == -1:
+                    pageset.add(url_start)
+                    pageset.add(url_end)
+                    groupset.setdefault(url_start, {}).setdefault(group, 0)
+                    groupset.setdefault(url_end, {}).setdefault(group, 0)
+                    groupset[url_start][group] += 1
+                    groupset[url_end][group] += 1
+
+        groupsort, groupnum = {}, {}
+        for k, v in groupset.items():
+            groupsort.setdefault(k, sorted([(value, key) for (key, value) in v.items()], reverse=True)[0][1])
+
+        for num, line in enumerate(set(line for line in groupsort.values())):
+            groupnum.setdefault(line, num)
+
+        for k, v in groupsort.items():
+            groupsort[k] = groupnum[v]
+
+        miserables = {"nodes": [], "links": []}
+        for page in pageset:
+            miserables["nodes"].append({"name": page, "group": groupsort[page] if self.dtype == 'double' else 2})
+
+        pageset = list(pageset)
+        if self.dtype == 'double':
+            for lines in results:
+                if lines[URL_START] in pageset and lines[URL_END] in pageset and lines[GROUP] in groupnum.keys():
+                    if groupsort[lines[URL_START]] == groupnum[lines[GROUP]]:
+                        miserables["links"].append({"source": pageset.index(lines[URL_START]),
+                                                    "target": pageset.index(lines[URL_END]),
+                                                    "value": (math.exp(lines[PERCENTAGE]) / 2 if lines[PERCENTAGE] < 0.05 else lines[PERCENTAGE] * 10)})
+        else:
+            for lines in results:
+                if lines[URL_START] in pageset and lines[URL_END] in pageset:
+                    miserables["links"].append({"source": pageset.index(lines[URL_START]),
+                                                "target": pageset.index(lines[URL_END]),
+                                                "value": (math.exp(lines[PERCENTAGE]) / 2 if lines[PERCENTAGE] < 0.05 else lines[PERCENTAGE] * 10)})
+
+        with self.output().open("wb") as out_file:
+            try:
+                out_file.write(bytes(json.dumps(miserables), ENCODE_UTF8))
+            except:
+                out_file.write(json.dumps(miserables))
+
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+
