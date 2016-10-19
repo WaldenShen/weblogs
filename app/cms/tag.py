@@ -107,7 +107,7 @@ class MappingTask(luigi.Task):
                 for line in in_file:
                     o = json.loads(line.decode(ENCODE_UTF8))
                     cookie_id, profile_id, creation_datetime = o["cookie_id"], o["individual_id"], o["creation_datetime"]
-                    if cookie_id != "cookie_id" and profile_id != "individual_id" and profile_id.find("XXXX") == -1:
+                    if cookie_id != "cookie_id":
                         relations.add("{}\t{}".format(cookie_id, profile_id))
 
         with self.output().open("wb") as out_file:
