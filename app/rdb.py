@@ -7,7 +7,7 @@ import logging
 
 import luigi
 import sqlite3
-import MySQLdb
+import psycopg2
 import jaydebeapi as jdbc
 
 from utils import norm_str
@@ -32,8 +32,8 @@ def get_connection():
 
     return connection
 
-def get_mysql_connection():
-    conn = MySQLdb.connect("localhost","root", "", "clickstream",charset='utf8')
+def get_psql_connection():
+    conn = psycopg2.connect("host='localhost' dbname='clickstream' user='rongqichen' password=''")
     return conn
 
 def get_writing_connection():
@@ -146,7 +146,7 @@ class TeradataTable(luigi.Task):
 class SqlliteTable(luigi.Task):
     task_namespace = "clickstream"
 
-    conn = luigi.Parameter(default="mysql")
+    conn = luigi.Parameter(default="psql")
     table = luigi.Parameter(default="stats_page")
     database = luigi.Parameter(default="clickstream.db")
 
@@ -158,8 +158,8 @@ class SqlliteTable(luigi.Task):
 
         conn = None
         table = None
-        if self.conn == "mysql":
-            conn = get_mysql_connection()
+        if self.conn == "psql":
+            conn = get_psql_connection()
             table = self.table
         elif self.conn == "sqlite":
             conn = sqlite3.connect(os.path.join(BASEPATH_SQLLITE, self.database))
