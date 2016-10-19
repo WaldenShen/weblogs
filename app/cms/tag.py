@@ -116,3 +116,28 @@ class MappingTask(luigi.Task):
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+
+class TagRecommendTask(luigi.Task):
+    task_namespace = "clickstream"
+
+    mode = luigi.Parameter(default="single")
+    trackday = luigi.IntParameter(default=56)
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        global BASEPATH_RAW, BASEPATH_TAG
+
+        if self.mode.lower() == "single":
+            for node_type in ['intention', 'logic2']:
+                ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(self.interval))
+                ofile = os.path.join(BASEPATH_TAG, "tagging_{}_{}.tsv.gz".format(node_type, self.interval))
+                yield TaggingTask(interval=self.interval, ntype=node_type, ifile=ifile, ofile=ofile)
+        elif self.mode.lower() == "range":
+            '''
+            for node_type in ['intention', 'logic2']:
+                ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))
+                ofile = os.path.join(BASEPATH_TAGGING, "tagging_{}_{}.tsv.gz".format(node_type, str(date)))
+                yield TaggingTask(interval=self.interval, ntype=node_type, ifile=ifile, ofile=ofile)
+            '''
+        else:
+            raise NotImplementedError

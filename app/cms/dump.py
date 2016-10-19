@@ -23,137 +23,169 @@ class DumpAllTask(luigi.Task):
     today = luigi.DateParameter(default=datetime.datetime.now())
 
     def requires(self):
-        return [DayNADumpTask(remove=self.remove), MonthMonthDumpTask(today=self.today), DayMonthDumpTask(remove=self.remove, today=self.today)]
-        #yield YearYearDumpTask(remove=self.remove, today=self.today)
-        #yield MonthYearDumpTask(remove=self.remove, today=self.today)
-
-class DayNADumpTask(luigi.Task):
-    task_namespace = "dump"
-
-    remove = luigi.BoolParameter()
-
-    def requires(self):
-        global BASEPATH_TERADATA
-
         sqls = ["SELECT CUSTOMER_ID, CUSTOMER_ID_MODIFIER, CR_EU_BANK_ACCT_IND, VIP_CODE FROM VP_MCIF.PARTY_CC",
                 "SELECT MCC_CODE, MCC_GROUP_CODE FROM VP_MCIF.RD_MIS_MCC_CODE",
                 "SELECT MCC_GROUP_CODE, MCC_GROUP_CODE_DESC FROM VP_MCIF.RD_MIS_MCC_GROUP_CODE",
                 "SELECT MERCHANT_ID, MERCHANT_NAME, CLASS_CODE FROM DP_MCIF_REF.RD_MIS_MERCHANT_ID",
                 "SELECT AFFGROUP_CODE,CARD_TYPE_CODE,CARD_NAME,KIND_NAME,KIND1,KIND2,COMBO FROM VP_MCIF.RD_CC_CATHAY_CARD_TYPE",
                 "SELECT CUSTOMER_ID, CARD_TYPE_CODE, CARD_NBR, INSIDE_DATE, OUTSIDE_DATE FROM VP_MCIF.EVENT_CC_AIRPORT_PARKING"]
-
         for sql in sqls:
-            table = sql.split(" ")[-1]
-            ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
-
-            if self.remove and os.path.exists(ofile):
-                os.remove(ofile)
-
-            yield TeradataTable(query=sql, ofile=ofile)
-
-class DayMonthDumpTask(luigi.Task):
-    task_namespace = "dump"
-
-    remove = luigi.BoolParameter()
-    today = luigi.DateParameter(default=datetime.datetime.now())
-
-    def requires(self):
-        global BASEPATH_TERADATA
+            yield DayNADumpTask(remove=self.remove, sql=sql)
 
         sqls = [("SELECT CUSTOMER_ID,CUSTOMER_ID_MODIFIER,CARD_NBR,DOMICILE_BRANCH,CARD_TYPE_CODE,CARDHOLDER_CUST_ID,BLOCK_CODE,CLOSED_DATE,CREDIT_LIMIT,AVAILABLE_CREDIT_LIMIT,ACCT_OPEN_DATE,PRIMARY_CARD_IND FROM VP_MCIF.ACCT_CC_DAILY", False),
                 ("SELECT CUSTOMER_ID, GENDER_TYPE_CODE,BIRTHDAY, CUSTOMER_ROLE_CODE, CUSTOMER_CLASS_CODE FROM VP_MCIF.PARTY_DRV WHERE BIRTHDAY >= CAST('1900-01-01' AS DATE)", False),
                 ("SELECT CUSTOMER_ID,CARD_TYPE_CATEGORY_CODE,CARD_TYPE_CODE,CARD_NBR,TXN_DATE,TXN_CODE,TXN_AMT,MERCHANT_NBR,MERCHANT_CATEGORY_CODE,MERCHANT_NAME,MERCHANT_LOCATION_CITY,MERCHANT_LOCATION_COUNTRY_CODE,ORIGINAL_CURRENCY_CODE,TXN_AMT_US_DOLLAR,PRIMARY_CARDHOLDER_IND,TREATY_CONV_AMT FROM VP_MCIF.EVENT_CC_TXN", True),
                 ("SELECT CUSTOMER_ID,Foreign_PB_Ind,Foreign_TD_Ind,Passbook_DP_Ind,Trust_Ind,INS_Agent_Life_IND,INS_Agent_PTY_IND,CreditCard_Ind FROM VP_MCIF.PARTY_DRV_PROD_IND", False)]
+        for sql, dump_past in sqls:
+            yield DayMonthDumpTask(remove=self.remove, today=self.today, sql=sql, dump_past=dump_past)
 
-        for osql, dump_past in sqls[:]:
-            #table = re.match("\sFROM\s([\w\d\.]+)"osql.split(" ")[-1]
-            table = re.search(r"\sFROM\s([\w\d\._]+)", osql).group(1)
+        sqls = [("SELECT CUSTOMER_ID,AVG_SAV_CHK_BAL,AVG_TIME_BAL,AVG_FUND_BAL,INSURANCE_BAL,REITS_BAL,AVG_CITA_BAL,AVG_STR_BAL,AUM_RP_BAL,AUM_TRU_BAL FROM VP_MCIF.PARTY_DRV_VIP", False),
+                ("SELECT CUSTOMER_ID,TXN_DATE,TXN_TYPE,CHANGE_BONUS_POINT,AFT_AVAILABLE_BONUS_POINT,TXN_MEMO FROM VP_MCIF.EVENT_UCL_BPOINT_TXN", True)]
+        for sql, dump in sqls:
+            yield MonthMonthDumpTask(today=self.today, sql=sql, dump=dump)
 
-            for diff in ([0, 30, 60, 90, 120, 150, 180] if dump_past else [0]):
-                month = self.today - datetime.timedelta(days=diff)
-                past = month.strftime("%Y%m")
+        '''
+        sqls = ["SELECT * FROM VP_MCIF.RPT_CC_COST", "SELECT * FROM VP_MCIF.RPT_CC_COST2"]
+        for sql in sqls:
+            yield YearYearDumpTask(remove=self.remove, today=self.today, sql=sql)
 
-                if past != self.today.strftime("%Y%m"):
-                    sql = osql + past
-                    logger.info((sql, table))
-                    ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, past))
+        sqls = ["SELECT * FROM VP_MCIF.PARTY_CC_JCIC_KRM046_DATA"]
+        for sql in sqls:
+            yield MonthYearDumpTask(remove=self.remove, today=self.today, sql=sql)
+        '''
+
+class DayNADumpTask(luigi.Task):
+    task_namespace = "dump"
+
+    remove = luigi.BoolParameter()
+    sql = luigi.Parameter()
+
+    def requires(self):
+        global BASEPATH_TERADATA
+
+        table = re.search(r"\sFROM\s([\w\d\._]+)", self.sql).group(1)
+        ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
+
+        if self.remove and os.path.exists(ofile):
+            os.remove(ofile)
+
+        yield TeradataTable(query=sql, ofile=ofile)
+
+class DayMonthDumpTask(luigi.Task):
+    task_namespace = "dump"
+
+    past = luigi.BoolParameter()
+    today = luigi.DateParameter(default=datetime.datetime.now())
+    sql = luigi.Parameter()
+
+    ofile = luigi.Parameter()
+
+    def requires(self):
+        table = re.search(r"\sFROM\s([\w\d\._]+)", self.sql).group(1)
+        for diff in ([0, 30, 60, 90, 120, 150, 180] if self.past else [0]):
+            month = self.today - datetime.timedelta(days=diff)
+            past = month.strftime("%Y%m")
+
+            if past != self.today.strftime("%Y%m"):
+                sql = self.sql + past
+                logger.info((sql, table))
+                ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, past))
+
+                yield TeradataTable(query=sql, ofile=ofile)
+            else:
+                idx = 1
+                while idx > self.today.days:
+                    current = self.today-datetime.timedelta(days=idx)
+                    yesterday = (current - datetime.timedelta(days=1))
+
+                    ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, current.strftime("%Y%m%d")))
+
+                    sql = self.sql + " AND CREATION_DATETIME >= CAST('{}' AS DATE) AND CREATION_DATETIME <= CAST('{}' AS DATE)".format(yesterday.strftime("%Y-%m-%d 00:00:00"), current.strftime("%Y-%m-%d 00:00:00"))
+                    idx += 1
 
                     yield TeradataTable(query=sql, ofile=ofile)
-                else:
-                    ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
 
-                    if self.remove and os.path.exists(ofile):
-                        os.remove(ofile)
+    def run(self):
+        with self.output().open("wb") as out_file:
+            write_header = True
+            for filepath in self.intput():
+                if re.match("\d{6,6}\.tsv\.gz", os.basename(filepath)):
+                    with open(filepath, "rb") as in_file:
+                        is_header = True
+                        for line in in_file:
+                            if is_header:
+                                if write_header:
+                                    out_file.write(line)
+                                    write_header = False
+                                is_header = False
+                            else:
+                                out_file.write(line)
 
-                    yield TeradataTable(query=osql, ofile=ofile)
+    def output(self):
+        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
 
 class MonthMonthDumpTask(luigi.Task):
     task_namespace = "dump"
 
+    sql = luigi.Parameter()
+    dump = luigi.BoolParameter()
     today = luigi.DateParameter(default=datetime.datetime.now())
 
     def requires(self):
         global BASEPATH_TERADATA
 
-        sqls = [("SELECT CUSTOMER_ID,AVG_SAV_CHK_BAL,AVG_TIME_BAL,AVG_FUND_BAL,INSURANCE_BAL,REITS_BAL,AVG_CITA_BAL,AVG_STR_BAL,AUM_RP_BAL,AUM_TRU_BAL FROM VP_MCIF.PARTY_DRV_VIP", False),
-                ("SELECT CUSTOMER_ID,TXN_DATE,TXN_TYPE,CHANGE_BONUS_POINT,AFT_AVAILABLE_BONUS_POINT,TXN_MEMO FROM VP_MCIF.EVENT_UCL_BPOINT_TXN", True)]
-
         first = self.today.replace(day=1)
         last_month = first - datetime.timedelta(days=1)
 
-        for sql, dump_past in sqls[:]:
-            table = sql.split(" ")[-1]
-            ofile = None
-            if dump_past:
-                ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, last_month.strftime("%Y%m")))
-            else:
-                ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
+        ofile = None
+        table = re.search(r"\sFROM\s([\w\d\._]+)", self.sql).group(1)
+        if self.dump:
+            ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, last_month.strftime("%Y%m")))
+        else:
+            ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
 
-            yield TeradataTable(query=sql+last_month.strftime("%Y%m"), ofile=ofile)
+        yield TeradataTable(query=sql+last_month.strftime("%Y%m"), ofile=ofile)
 
 class YearYearDumpTask(luigi.Task):
     task_namespace = "dump"
 
     remove = luigi.BoolParameter()
+    sql = luigi.Parameter()
     today = luigi.DateParameter(default=datetime.datetime.now())
 
     def requires(self):
         global BASEPATH_TERADATA
 
         year = self.today.year-1
-        sqls = ["SELECT * FROM VP_MCIF.RPT_CC_COST", "SELECT * FROM VP_MCIF.RPT_CC_COST2"]
 
-        for sql in sqls[:]:
-            table = sql.split(" ")[-1]
-            ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
-            sql = sql + str(year)
+        table = re.search(r"\sFROM\s([\w\d\._]+)", self.sql).group(1)
+        ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
+        sql = self.sql + str(year)
 
-            if self.remove and os.path.exists(ofile):
-                os.remove(ofile)
+        if self.remove and os.path.exists(ofile):
+            os.remove(ofile)
 
-            yield TeradataTable(query=sql, ofile=ofile)
+        yield TeradataTable(query=sql, ofile=ofile)
 
 class MonthYearDumpTask(luigi.Task):
     task_namespace = "dump"
 
+    sql = luigi.Parameter()
     remove = luigi.BoolParameter()
     today = luigi.DateParameter(default=datetime.datetime.now())
 
     def requires(self):
         global BASEPATH_TERADATA
 
-        sqls = ["SELECT * FROM VP_MCIF.PARTY_CC_JCIC_KRM046_DATA"]
-
         self.today = self.today.replace(day=1)
         if self.today.day == 1:
-            for sql in sqls[:]:
-                table = sql.split(" ")[-1]
-                ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
-                sql = sql + str(self.today.year)
+            table = re.search(r"\sFROM\s([\w\d\._]+)", self.sql).group(1)
+            ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
+            sql = self.sql + str(self.today.year)
 
-                if self.remove and os.path.exists(ofile):
-                    os.remove(ofile)
+            if self.remove and os.path.exists(ofile):
+                os.remove(ofile)
 
-                yield TeradataTable(query=sql, ofile=ofile)
+            yield TeradataTable(query=sql, ofile=ofile)
         else:
             logger.warn("not the first date of this month({})".format(self.today))
