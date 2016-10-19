@@ -22,12 +22,9 @@ class DumpAllTask(luigi.Task):
     today = luigi.DateParameter(default=datetime.datetime.now())
 
     def requires(self):
-        yield DayNADumpTask(remove=self.remove)
-        yield MonthMonthDumpTask(remove=self.remove, today=self.today)
+        return [DayNADumpTask(remove=self.remove), MonthMonthDumpTask(remove=self.remove, today=self.today), DayMonthDumpTask(remove=True, today=self.today)]
         #yield YearYearDumpTask(remove=self.remove, today=self.today)
         #yield MonthYearDumpTask(remove=self.remove, today=self.today)
-
-        yield DayMonthDumpTask(remove=self.remove, today=self.today.strftime("%Y-%m-%d"))
 
 class DayNADumpTask(luigi.Task):
     task_namespace = "dump"
@@ -57,40 +54,36 @@ class DayMonthDumpTask(luigi.Task):
     task_namespace = "dump"
 
     remove = luigi.BoolParameter()
-    today = luigi.Parameter()
+    today = luigi.DateParameter(default=datetime.datetime.now())
 
     def requires(self):
         global BASEPATH_TERADATA
 
-        sqls = [("SELECT CUSTOMER_ID,CUSTOMER_ID_MODIFIER,CARD_NBR,DOMICILE_BRANCH,CARD_TYPE_CODE,CARDHOLDER_CUST_ID,BLOCK_CODE,CLOSED_DATE,CREDIT_LIMIT,AVAILABLE_CARD_LIMIT,ACCT_OPEN_DATE,PRIMARY_CARD_IND FROM VP_MCIF.ACCT_CC_DAILY", False),
+        sqls = [("SELECT CUSTOMER_ID,CUSTOMER_ID_MODIFIER,CARD_NBR,DOMICILE_BRANCH,CARD_TYPE_CODE,CARDHOLDER_CUST_ID,BLOCK_CODE,CLOSED_DATE,CREDIT_LIMIT,AVAILABLE_CREDIT_LIMIT,ACCT_OPEN_DATE,PRIMARY_CARD_IND FROM VP_MCIF.ACCT_CC_DAILY", False),
                 ("SELECT CUSTOMER_ID, GENDER_TYPE_CODE,BIRTHDAY, CUSTOMER_ROLE_CODE, CUSTOMER_CLASS_CODE FROM VP_MCIF.PARTY_DRV", False),
                 ("SELECT CUSTOMER_ID,CARD_TYPE_CATEGORY_CODE,CARD_TYPE_CODE,CARD_NBR,TXN_DATE,TXN_CODE,TXN_AMT,MERCHANT_NBR,MERCHANT_CATEGORY_CODE,MERCHANT_NAME,MERCHANT_LOCATION_CITY,MERCHANT_LOCATION_COUNTRY_CODE,ORIGINAL_CURRENCY_CODE,TXN_AMT_US_DOLLAR,PRIMARY_CARDHOLDER_IND,TREATY_CONV_AMT FROM VP_MCIF.EVENT_CC_TXN", True),
                 ("SELECT CUSTOMER_ID,Foreign_PB_Ind,Foreign_TD_Ind,Passbook_DP_Ind,Trust_Ind,INS_Agent_Life_IND,INS_Agent_PTY_IND,CreditCard_Ind FROM VP_MCIF.PARTY_DRV_PROD_IND", False)]
 
-        done = set()
         for osql, dump_past in sqls[:]:
             table = osql.split(" ")[-1]
+            logger.info(table)
 
             for diff in ([0, 30, 60, 90, 120, 150, 180] if dump_past else [0]):
-                month = datetime.datetime.strptime(self.today, "%Y-%m-%d") - datetime.timedelta(days=diff)
+                month = self.today - datetime.timedelta(days=diff)
                 past = month.strftime("%Y%m")
 
-                if past not in done:
-                    if past != datetime.datetime.now().strftime("%Y%m"):
-                        sql = osql + past
-                        ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, past))
+                if past != self.today.strftime("%Y%m"):
+                    sql = osql + past
+                    ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, past))
 
-                        yield TeradataTable(query=sql, ofile=ofile)
-                        done.add((osql, past))
-                    else:
-                        if month.day == 1:
-                            ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
+                    yield TeradataTable(query=sql, ofile=ofile)
+                else:
+                    ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
 
-                            if self.remove and os.path.exists(ofile):
-                                os.remove(ofile)
+                    if self.remove and os.path.exists(ofile):
+                        os.remove(ofile)
 
-                            yield TeradataTable(query=osql, ofile=ofile)
-                            done.add((osql, past))
+                    yield TeradataTable(query=osql, ofile=ofile)
 
 class MonthMonthDumpTask(luigi.Task):
     task_namespace = "dump"
