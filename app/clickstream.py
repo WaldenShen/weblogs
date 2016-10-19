@@ -29,7 +29,8 @@ BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
 BASEPATH_TAG = os.path.join(BASEPATH, "data", "tag")
 BASEPATH_CLUSTER = os.path.join(BASEPATH, "data", "cluster")
-BASEPATH_D3 = os.path.join(BASEPATH, "data", "D3") 
+BASEPATH_CMS = os.path.join(BASEPATH, "data", "cms")
+BASEPATH_D3 = os.path.join(BASEPATH, "data", "D3")
 
 class RawTask(luigi.Task):
     task_namespace = "clickstream"
@@ -167,9 +168,6 @@ class AdvancedTask(luigi.Task):
                 ofile = os.path.join(BASEPATH_STATS, "interval_{}.tsv.gz".format(str(date)))
                 yield IntervalTask(ifile=ifile, ofile=ofile)
 
-                ofile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
-                yield MappingTask(ifile=ifile, ofile=ofile)
-
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:
                     ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, str(date)))
@@ -301,7 +299,7 @@ class CMSTask(luigi.Task):
     interval = luigi.DateIntervalParameter()
 
     def requires(self):
-        global  BASEPATH_RAW, BASEPATH_TAG
+        global  BASEPATH_RAW, BASEPATH_CMS
 
         ifiles = []
         for date in self.interval:
@@ -309,8 +307,11 @@ class CMSTask(luigi.Task):
             ifiles.append(os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date))))
 
         for tagtype in [LOGIC, INTENTION]:
-            ofile = os.path.join(BASEPATH_TAG, "{}_{}.tsv.gz".format(tagtype, str(interval)))
+            ofile = os.path.join(BASEPATH_CMS, "{}_{}.tsv.gz".format(tagtype, str(interval)))
             yield TagOutputTask(ifiles=ifiles, ofile=ofile, tagtype=tagtype)
+
+        ofile = os.path.join(BASEPATH_CMS, "mapping_{}.tsv.gz".format(str(date)))
+        yield MappingTask(ifile=ifiles, ofile=ofile)
 
 class TagRecommendTask(luigi.Task):
     task_namespace = "clickstream"
@@ -327,9 +328,7 @@ class TagRecommendTask(luigi.Task):
                 ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(self.interval))
                 ofile = os.path.join(BASEPATH_TAG, "tagging_{}_{}.tsv.gz".format(node_type, self.interval))
                 yield TaggingTask(interval=self.interval, ntype=node_type, ifile=ifile, ofile=ofile)
-
         elif self.mode.lower() == "range":
-            pass
             '''
             for node_type in ['intention', 'logic2']:
                 ifile = os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date)))

@@ -93,19 +93,20 @@ class TagTask(luigi.Task):
 class MappingTask(luigi.Task):
     task_namespace = "clickstream"
 
-    ifile = luigi.Parameter()
+    ifiles = luigi.ListParameter()
     ofile = luigi.Parameter()
 
     def run(self):
         global ENCODE_UTF8
 
         with self.output().open("wb") as out_file:
-            with gzip.open(self.ifile, "rb") as in_file:
-                for line in in_file:
-                    o = json.loads(line.decode(ENCODE_UTF8))
-                    cookie_id, profile_id, creation_datetime = o["cookie_id"], o["individual_id"], o["creation_datetime"]
+            for filepath in self.ifiles:
+                with gzip.open(filepath, "rb") as in_file:
+                    for line in in_file:
+                        o = json.loads(line.decode(ENCODE_UTF8))
+                        cookie_id, profile_id, creation_datetime = o["cookie_id"], o["individual_id"], o["creation_datetime"]
 
-                    out_file.write("{}\n".format(json.dumps({"cookie_id": cookie_id, "individual_id": profile_id, "creation_datetime": creation_datetime})))
+                        out_file.write("{}\n".format(json.dumps({"cookie_id": cookie_id, "individual_id": profile_id, "creation_datetime": creation_datetime})))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
