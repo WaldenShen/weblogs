@@ -18,7 +18,7 @@ logger.setLevel(logging.INFO)
 BASEPATH = "{}/..".format(os.path.dirname(os.path.abspath(__file__)))
 BASEPATH_TAG = os.path.join(BASEPATH, "data", "tag")
 BASEPATH_RAW = os.path.join(BASEPATH, "data", "raw")
-
+BASEPATH_CMS = os.path.join(BASEPATH, "data", "cms")
 
 class TagOutputTask(luigi.Task):
     task_namespace = "clickstream"
@@ -29,16 +29,18 @@ class TagOutputTask(luigi.Task):
     tagtype = luigi.Parameter()
 
     def run(self):
-        global ENCODE_UTF8
+        global ENCODE_UTF8, BASEPATH_CMS
 
         cookie = {}
-
         for filepath in self.ifiles:
             with gzip.open(filepath, "rb") as in_file:
                 for line in in_file:
                     o = json.loads(line.decode(ENCODE_UTF8).strip())
 
                     cookie.setdefault(o["cookie_id"], {})
+                    if o["cookie_id"] == "cookie_id":
+                        continue
+
                     for k, v in o[self.tagtype].items():
                         if not is_uncategorized_key(k):
                             k = norm_str(k)
@@ -97,16 +99,20 @@ class MappingTask(luigi.Task):
     ofile = luigi.Parameter()
 
     def run(self):
-        global ENCODE_UTF8
+        global ENCODE_UTF8, BASEPATH_CMS
+
+        relations = set()
+        for filepath in self.ifiles:
+            with gzip.open(filepath, "rb") as in_file:
+                for line in in_file:
+                    o = json.loads(line.decode(ENCODE_UTF8))
+                    cookie_id, profile_id, creation_datetime = o["cookie_id"], o["individual_id"], o["creation_datetime"]
+                    if cookie_id != "cookie_id" and profile_id != "individual_id" and profile_id.find("XXXX") == -1:
+                        relations.add("{}\t{}".format(cookie_id, profile_id))
 
         with self.output().open("wb") as out_file:
-            for filepath in self.ifiles:
-                with gzip.open(filepath, "rb") as in_file:
-                    for line in in_file:
-                        o = json.loads(line.decode(ENCODE_UTF8))
-                        cookie_id, profile_id, creation_datetime = o["cookie_id"], o["individual_id"], o["creation_datetime"]
-
-                        out_file.write("{}\n".format(json.dumps({"cookie_id": cookie_id, "individual_id": profile_id, "creation_datetime": creation_datetime})))
+            for relation in relations:
+               out_file.write("{}\n".format(relation))
 
     def output(self):
         return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)

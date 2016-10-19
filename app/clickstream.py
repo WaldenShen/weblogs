@@ -297,21 +297,41 @@ class CMSTask(luigi.Task):
     task_namespace = "clickstream"
 
     interval = luigi.DateIntervalParameter()
+    ofile = luigi.Parameter(default=os.path.join(BASEPATH_CMS, "{}.done".format(datetime.datetime.now().strftime("%Y-%m-%d"))))
 
     def requires(self):
         global  BASEPATH_RAW, BASEPATH_CMS
 
         ifiles = []
+        self.ofiles = []
+
         for date in self.interval:
             interval = d.Date.parse(str(date))
             ifiles.append(os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date))))
 
         for tagtype in [LOGIC, INTENTION]:
             ofile = os.path.join(BASEPATH_CMS, "{}_{}.tsv.gz".format(tagtype, str(interval)))
+            self.ofiles.append((ofile, os.path.join(BASEPATH_CMS, "{}.tsv.gz".format(tagtype))))
+
             yield TagOutputTask(ifiles=ifiles, ofile=ofile, tagtype=tagtype)
 
         ofile = os.path.join(BASEPATH_CMS, "mapping_{}.tsv.gz".format(str(date)))
+        self.ofiles.append((ofile, os.path.join(BASEPATH_CMS, "mapping.tsv.gz")))
+
         yield MappingTask(ifiles=ifiles, ofile=ofile)
+
+    def run(self):
+        for src, det in self.ofiles:
+            if os.path.exists(det):
+                os.unlink(det)
+
+            os.symlink(src, det)
+
+        with self.output().open("wb") as out_file:
+            pass
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
 
 class TagRecommendTask(luigi.Task):
     task_namespace = "clickstream"
