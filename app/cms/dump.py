@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import os
+import re
 import luigi
 import logging
 import datetime
@@ -65,8 +66,8 @@ class DayMonthDumpTask(luigi.Task):
                 ("SELECT CUSTOMER_ID,Foreign_PB_Ind,Foreign_TD_Ind,Passbook_DP_Ind,Trust_Ind,INS_Agent_Life_IND,INS_Agent_PTY_IND,CreditCard_Ind FROM VP_MCIF.PARTY_DRV_PROD_IND", False)]
 
         for osql, dump_past in sqls[:]:
-            table = osql.split(" ")[-7]
-            logger.info(table)
+            #table = re.match("\sFROM\s([\w\d\.]+)"osql.split(" ")[-1]
+            table = re.search(r"\sFROM\s([\w\d\._]+)", osql).group(1)
 
             for diff in ([0, 30, 60, 90, 120, 150, 180] if dump_past else [0]):
                 month = self.today - datetime.timedelta(days=diff)
