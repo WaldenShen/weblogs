@@ -22,7 +22,11 @@ class DumpAllTask(luigi.Task):
     remove = luigi.BoolParameter()
     today = luigi.DateParameter(default=datetime.datetime.now())
 
+    ofile = luigi.Parameter(default=os.path.join(BASEPATH_TERADATA, "{}.done".format(datetime.datetime.now().strftime("%Y-%m-%d"))))
+
     def requires(self):
+        self.ofiles = []
+
         sqls = ["SELECT CUSTOMER_ID, CUSTOMER_ID_MODIFIER, CR_EU_BANK_ACCT_IND, VIP_CODE FROM VP_MCIF.PARTY_CC",
                 "SELECT MCC_CODE, MCC_GROUP_CODE FROM VP_MCIF.RD_MIS_MCC_CODE",
                 "SELECT MCC_GROUP_CODE, MCC_GROUP_CODE_DESC FROM VP_MCIF.RD_MIS_MCC_GROUP_CODE",
@@ -37,7 +41,12 @@ class DumpAllTask(luigi.Task):
                 ("SELECT CUSTOMER_ID,CARD_TYPE_CATEGORY_CODE,CARD_TYPE_CODE,CARD_NBR,TXN_DATE,TXN_CODE,TXN_AMT,MERCHANT_NBR,MERCHANT_CATEGORY_CODE,MERCHANT_NAME,MERCHANT_LOCATION_CITY,MERCHANT_LOCATION_COUNTRY_CODE,ORIGINAL_CURRENCY_CODE,TXN_AMT_US_DOLLAR,PRIMARY_CARDHOLDER_IND,TREATY_CONV_AMT FROM VP_MCIF.EVENT_CC_TXN", True),
                 ("SELECT CUSTOMER_ID,Foreign_PB_Ind,Foreign_TD_Ind,Passbook_DP_Ind,Trust_Ind,INS_Agent_Life_IND,INS_Agent_PTY_IND,CreditCard_Ind FROM VP_MCIF.PARTY_DRV_PROD_IND", False)]
         for sql, dump_past in sqls:
-            yield DayMonthDumpTask(remove=self.remove, today=self.today, sql=sql, dump_past=dump_past)
+            table = re.search(r"\sFROM\s([\w\d\._]+)", sql).group(1)
+            ofile = os.path.join(BASEPATH_TERADATA, "{}_{}.tsv.gz".format(table, self.today.strftime("%Y-%m-%d")))
+
+            self.ofiles.append((ofile, os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))))
+
+            yield DayMonthDumpTask(remove=self.remove, today=self.today, sql=sql, table=table, dump=dump_past, ofile=ofile)
 
         sqls = [("SELECT CUSTOMER_ID,AVG_SAV_CHK_BAL,AVG_TIME_BAL,AVG_FUND_BAL,INSURANCE_BAL,REITS_BAL,AVG_CITA_BAL,AVG_STR_BAL,AUM_RP_BAL,AUM_TRU_BAL FROM VP_MCIF.PARTY_DRV_VIP", False),
                 ("SELECT CUSTOMER_ID,TXN_DATE,TXN_TYPE,CHANGE_BONUS_POINT,AFT_AVAILABLE_BONUS_POINT,TXN_MEMO FROM VP_MCIF.EVENT_UCL_BPOINT_TXN", True)]
@@ -53,6 +62,19 @@ class DumpAllTask(luigi.Task):
         for sql in sqls:
             yield MonthYearDumpTask(remove=self.remove, today=self.today, sql=sql)
         '''
+
+    def run(self):
+        for src, det in self.ofiles:
+            if os.path.exists(det):
+                os.unlink(det)
+
+            os.symlink(src, det)
+
+        with self.output().open("wb") as out_file:
+            pass
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)
 
 class DayNADumpTask(luigi.Task):
     task_namespace = "dump"
@@ -74,15 +96,15 @@ class DayNADumpTask(luigi.Task):
 class DayMonthDumpTask(luigi.Task):
     task_namespace = "dump"
 
-    past = luigi.BoolParameter()
+    dump = luigi.BoolParameter()
     today = luigi.DateParameter(default=datetime.datetime.now())
     sql = luigi.Parameter()
+    table = luigi.Parameter()
 
-    ofile = luigi.Parameter()
+    ofile = luigi.Parameter(default=None)
 
     def requires(self):
-        table = re.search(r"\sFROM\s([\w\d\._]+)", self.sql).group(1)
-        for diff in ([0, 30, 60, 90, 120, 150, 180] if self.past else [0]):
+        for diff in ([0, 30, 60, 90, 120, 150, 180] if self.dump else [0]):
             month = self.today - datetime.timedelta(days=diff)
             past = month.strftime("%Y%m")
 
@@ -94,7 +116,7 @@ class DayMonthDumpTask(luigi.Task):
                 yield TeradataTable(query=sql, ofile=ofile)
             else:
                 idx = 1
-                while idx > self.today.days:
+                while idx < self.today.days+1:
                     current = self.today-datetime.timedelta(days=idx)
                     yesterday = (current - datetime.timedelta(days=1))
 
@@ -109,7 +131,7 @@ class DayMonthDumpTask(luigi.Task):
         with self.output().open("wb") as out_file:
             write_header = True
             for filepath in self.intput():
-                if re.match("\d{6,6}\.tsv\.gz", os.basename(filepath)):
+                if re.match("[\d-]{8,8}\.tsv\.gz$", os.basename(filepath)):
                     with open(filepath, "rb") as in_file:
                         is_header = True
                         for line in in_file:
