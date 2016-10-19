@@ -311,7 +311,7 @@ class CMSTask(luigi.Task):
             yield TagOutputTask(ifiles=ifiles, ofile=ofile, tagtype=tagtype)
 
         ofile = os.path.join(BASEPATH_CMS, "mapping_{}.tsv.gz".format(str(date)))
-        yield MappingTask(ifile=ifiles, ofile=ofile)
+        yield MappingTask(ifiles=ifiles, ofile=ofile)
 
 class TagRecommendTask(luigi.Task):
     task_namespace = "clickstream"
