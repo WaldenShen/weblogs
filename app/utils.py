@@ -124,6 +124,26 @@ def is_uncategorized_key(s):
 
     return is_uncategorized
 
+def is_unwanted(s):
+    is_pass = False
+
+    if s.strip() == "?":
+        is_pass = True
+    else:
+        for pattern in ["b2b", "error", u"註冊及申請", u"錯誤", "w", "intention", u"設定及管理", "mybank", u"功能介紹", u"已停止申辦", "myatm"]:
+            if s.find(pattern) > -1:
+                is_pass = True
+                break
+
+    return is_pass
+
+def merge_costco(s):
+    term = s
+    if s.find("costco") > -1:
+        term = "costco related"
+
+    return term
+
 def is_internal_ip(ip):
     is_internal = False
 

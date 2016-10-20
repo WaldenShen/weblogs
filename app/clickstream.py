@@ -9,7 +9,7 @@ import datetime
 
 from luigi import date_interval as d
 from saisyo import SimpleDynamicTask, RawPageError
-from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, CookieHistoryTask
+from complex import PageCorrTask, RetentionTask, CommonPathTask, NALTask, IntervalTask, CookieHistoryTask, TaggingTask
 from cluster.community import CommunityDetectionTask, HabitDetectionTask, MemberDetectionTask
 from cluster.model import LDATask
 from cms.tag import TagOutputTask, MappingTask
@@ -29,7 +29,8 @@ BASEPATH_ADV = os.path.join(BASEPATH, "data", "adv")
 BASEPATH_STATS = os.path.join(BASEPATH, "data", "stats")
 BASEPATH_TAG = os.path.join(BASEPATH, "data", "tag")
 BASEPATH_CLUSTER = os.path.join(BASEPATH, "data", "cluster")
-
+BASEPATH_CMS = os.path.join(BASEPATH, "data", "cms")
+BASEPATH_D3 = os.path.join(BASEPATH, "data", "D3")
 
 class RawTask(luigi.Task):
     task_namespace = "clickstream"
@@ -167,9 +168,6 @@ class AdvancedTask(luigi.Task):
                 ofile = os.path.join(BASEPATH_STATS, "interval_{}.tsv.gz".format(str(date)))
                 yield IntervalTask(ifile=ifile, ofile=ofile)
 
-                ofile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
-                yield MappingTask(ifile=ifile, ofile=ofile)
-
                 '''
                 for node_type in ["url", "logic1", "logic2", "function", "intention"]:
                     ofile_page_corr = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, str(date)))
@@ -235,12 +233,6 @@ class RDBTask(luigi.Task):
 
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-                ifile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
-                ofile = os.path.join(BASEPATH_DB, "mapping_{}.tsv.gz".format(str(date)))
-                table = "mapping_id"
-
-                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
-
             '''
             table = "adv_pagecorr"
             for node_type in ["url", "logic", "function", "intention"]:
@@ -299,15 +291,38 @@ class CMSTask(luigi.Task):
     task_namespace = "clickstream"
 
     interval = luigi.DateIntervalParameter()
+    ofile = luigi.Parameter(default=os.path.join(BASEPATH_CMS, "{}.done".format(datetime.datetime.now().strftime("%Y-%m-%d"))))
 
     def requires(self):
-        global  BASEPATH_RAW, BASEPATH_TAG
+        global  BASEPATH_RAW, BASEPATH_CMS
 
         ifiles = []
+        self.ofiles = []
+
         for date in self.interval:
             interval = d.Date.parse(str(date))
             ifiles.append(os.path.join(BASEPATH_RAW, "cookie_{}.tsv.gz".format(str(date))))
 
         for tagtype in [LOGIC, INTENTION]:
-            ofile = os.path.join(BASEPATH_TAG, "{}_{}.tsv.gz".format(tagtype, str(interval)))
+            ofile = os.path.join(BASEPATH_CMS, "{}_{}.tsv.gz".format(tagtype, str(interval)))
+            self.ofiles.append((ofile, os.path.join(BASEPATH_CMS, "{}.tsv.gz".format(tagtype))))
+
             yield TagOutputTask(ifiles=ifiles, ofile=ofile, tagtype=tagtype)
+
+        ofile = os.path.join(BASEPATH_CMS, "mapping_{}.tsv.gz".format(str(date)))
+        self.ofiles.append((ofile, os.path.join(BASEPATH_CMS, "mapping.tsv.gz")))
+
+        yield MappingTask(ifiles=ifiles, ofile=ofile)
+
+    def run(self):
+        for src, det in self.ofiles:
+            if os.path.exists(det):
+                os.unlink(det)
+
+            os.symlink(src, det)
+
+        with self.output().open("wb") as out_file:
+            pass
+
+    def output(self):
+        return luigi.LocalTarget(self.ofile)

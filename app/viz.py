@@ -121,3 +121,23 @@ class VizCorrelationTask(luigi.Task):
                     else:
                         o = json.loads(line.decode(ENCODE_UTF8).strip())
                         node_start, node_end, percentage = o["url_start"], o["url_end"], o["percentage"]
+
+class D3Task(luigi.Task):
+    task_namespace = "clickstream"
+
+    mode = luigi.Parameter(default="single")
+    trackday = luigi.IntParameter(default=56)
+    interval = luigi.DateIntervalParameter()
+
+    def requires(self):
+        global BASEPATH_ADV, BASEPATH_D3
+        if self.mode.lower() == "single":
+            for node_type in ["logic1", "logic2", "function", "intention", "logic", "logic1_intention",
+                              "logic2_intention", "logic1_function", "logic2_function"]:
+                dtype = 'single' if node_type.find('_') == -1 else 'double'
+                ifile = os.path.join(BASEPATH_ADV, "{}corr_{}.tsv.gz".format(node_type, self.interval))
+                ofile = os.path.join(BASEPATH_D3, "D3{}corr_{}.tsv.gz".format(node_type, self.interval))
+                yield D3CorrTask(interval=self.interval, dtype=dtype, ntype=node_type, ifile=ifile, ofile=ofile)
+
+        else:
+            raise NotImplementedError
