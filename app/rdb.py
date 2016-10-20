@@ -33,7 +33,7 @@ def get_connection():
     return connection
 
 def get_psql_connection():
-    conn = psycopg2.connect("host='localhost' dbname='clickstream' user='rongqichen' password=''")
+    conn = psycopg2.connect("host='localhost' dbname='clickstream' user='tagging' password='tagging'")
     return conn
 
 def get_writing_connection():

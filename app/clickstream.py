@@ -233,12 +233,6 @@ class RDBTask(luigi.Task):
 
                 yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
 
-                ifile = os.path.join(BASEPATH_STATS, "mapping_{}.tsv.gz".format(str(date)))
-                ofile = os.path.join(BASEPATH_DB, "mapping_{}.tsv.gz".format(str(date)))
-                table = "mapping_id"
-
-                yield SqlliteTable(table=table, ifile=ifile, ofile=ofile)
-
             '''
             table = "adv_pagecorr"
             for node_type in ["url", "logic", "function", "intention"]:
