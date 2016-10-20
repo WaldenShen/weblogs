@@ -97,6 +97,7 @@ class DayMonthDumpTask(luigi.Task):
     task_namespace = "dump"
 
     dump = luigi.BoolParameter()
+    remove = luigi.BoolParameter()
     today = luigi.DateParameter(default=datetime.datetime.now())
     sql = luigi.Parameter()
     table = luigi.Parameter()
@@ -110,41 +111,16 @@ class DayMonthDumpTask(luigi.Task):
 
             if past != self.today.strftime("%Y%m"):
                 sql = self.sql + past
-                logger.info((sql, table))
-                ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, past))
+                ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(self.table, past))
 
                 yield TeradataTable(query=sql, ofile=ofile)
             else:
-                idx = 1
-                while idx < self.today.days+1:
-                    current = self.today-datetime.timedelta(days=idx)
-                    yesterday = (current - datetime.timedelta(days=1))
+                ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(self.table))
 
-                    ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, current.strftime("%Y%m%d")))
+                if self.remove and os.path.exists(ofile):
+                    os.remove(ofile)
 
-                    sql = self.sql + " AND CREATION_DATETIME >= CAST('{}' AS DATE) AND CREATION_DATETIME <= CAST('{}' AS DATE)".format(yesterday.strftime("%Y-%m-%d 00:00:00"), current.strftime("%Y-%m-%d 00:00:00"))
-                    idx += 1
-
-                    yield TeradataTable(query=sql, ofile=ofile)
-
-    def run(self):
-        with self.output().open("wb") as out_file:
-            write_header = True
-            for filepath in self.intput():
-                if re.match("[\d-]{8,8}\.tsv\.gz$", os.basename(filepath)):
-                    with open(filepath, "rb") as in_file:
-                        is_header = True
-                        for line in in_file:
-                            if is_header:
-                                if write_header:
-                                    out_file.write(line)
-                                    write_header = False
-                                is_header = False
-                            else:
-                                out_file.write(line)
-
-    def output(self):
-        return luigi.LocalTarget(self.ofile, format=luigi.format.Gzip)
+                yield TeradataTable(query=self.sql, ofile=ofile)
 
 class MonthMonthDumpTask(luigi.Task):
     task_namespace = "dump"
