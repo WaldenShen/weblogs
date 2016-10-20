@@ -19,9 +19,7 @@ BASEPATH_TERADATA = os.path.join(BASEPATH, "data", "teradata")
 class DumpAllTask(luigi.Task):
     task_namespace = "dump"
 
-    remove = luigi.BoolParameter()
     today = luigi.DateParameter(default=datetime.datetime.now())
-
     ofile = luigi.Parameter(default=os.path.join(BASEPATH_TERADATA, "{}.done".format(datetime.datetime.now().strftime("%Y-%m-%d"))))
 
     def requires(self):
@@ -35,10 +33,8 @@ class DumpAllTask(luigi.Task):
                 "SELECT CUSTOMER_ID, CARD_TYPE_CODE, CARD_NBR, INSIDE_DATE, OUTSIDE_DATE FROM VP_MCIF.EVENT_CC_AIRPORT_PARKING"]
         for sql in sqls:
             table = re.search(r"\sFROM\s([\w\d\._]+)", sql).group(1)
-            ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
-
-            if self.remove and os.path.exists(ofile):
-                os.remove(ofile)
+            ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, self.today.strftime("%Y%m%d")))
+            self.ofiles.append((ofile, os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))))
 
             yield TeradataTable(query=sql, ofile=ofile)
 
@@ -60,9 +56,6 @@ class DumpAllTask(luigi.Task):
                 else:
                     ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, self.today.strftime("%Y%m%d")))
                     self.ofiles.append((ofile, os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))))
-
-                    if self.remove and os.path.exists(ofile):
-                        os.remove(ofile)
 
                     yield TeradataTable(query=osql, ofile=ofile)
 
