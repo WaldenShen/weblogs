@@ -25,6 +25,8 @@ class DumpAllTask(luigi.Task):
     ofile = luigi.Parameter(default=os.path.join(BASEPATH_TERADATA, "{}.done".format(datetime.datetime.now().strftime("%Y-%m-%d"))))
 
     def requires(self):
+        self.ofiles = []
+
         sqls = ["SELECT CUSTOMER_ID, CUSTOMER_ID_MODIFIER, CR_EU_BANK_ACCT_IND, VIP_CODE FROM VP_MCIF.PARTY_CC",
                 "SELECT MCC_CODE, MCC_GROUP_CODE FROM VP_MCIF.RD_MIS_MCC_CODE",
                 "SELECT MCC_GROUP_CODE, MCC_GROUP_CODE_DESC FROM VP_MCIF.RD_MIS_MCC_GROUP_CODE",
@@ -56,7 +58,8 @@ class DumpAllTask(luigi.Task):
 
                     yield TeradataTable(query=sql, ofile=ofile)
                 else:
-                    ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
+                    ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, self.today.strftime("%Y%m%d")))
+                    self.ofiles.append((ofile, os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))))
 
                     if self.remove and os.path.exists(ofile):
                         os.remove(ofile)
@@ -74,7 +77,8 @@ class DumpAllTask(luigi.Task):
             if dump:
                 ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, last_month.strftime("%Y%m")))
             else:
-                ofile = os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))
+                ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, self.today.strftime("%Y%m%d")))
+                self.ofiles.append(ofile, os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table)))
 
             yield TeradataTable(query=sql+last_month.strftime("%Y%m"), ofile=ofile)
 
@@ -107,6 +111,12 @@ class DumpAllTask(luigi.Task):
         '''
 
     def run(self):
+        for src, det in self.ofiles():
+            if os.path.exists(det):
+                os.unlink(det)
+
+            os.symlink(src, det)
+
         with self.output().open("wb") as out_file:
             pass
 
