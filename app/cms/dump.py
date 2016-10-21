@@ -71,7 +71,7 @@ class DumpAllTask(luigi.Task):
                 ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, last_month.strftime("%Y%m")))
             else:
                 ofile = os.path.join(BASEPATH_TERADATA, "{}{}.tsv.gz".format(table, self.today.strftime("%Y%m%d")))
-                self.ofiles.append(ofile, os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table)))
+                self.ofiles.append((ofile, os.path.join(BASEPATH_TERADATA, "{}.tsv.gz".format(table))))
 
             yield TeradataTable(query=sql+last_month.strftime("%Y%m"), ofile=ofile)
 
@@ -106,7 +106,7 @@ class DumpAllTask(luigi.Task):
     def run(self):
         for src, det in self.ofiles():
             if os.path.exists(det):
-                os.unlink(det)
+                os.remove(det)
 
             os.symlink(src, det)
 

@@ -80,8 +80,37 @@ CREATE TABLE stats_page (
   profile_view int,
   duration real,
   active_duration real,
-  loading_duration real
+  loading_duration real,
+  PRIMARY_KEY (date_type, creation_datetime)
 );
+
+CREATE TABLE stats_page_y2016m06 (
+  CHECK (creation_datetime >= '2016-06-01' AND creation_datetime < '2016-07-01')
+) INHERITS (stats_page);
+
+CREATE TABLE stats_page_y2016m07 (
+  CHECK (creation_datetime >= '2016-07-01' AND creation_datetime < '2016-08-01')
+) INHERITS (stats_page);
+
+CREATE TABLE stats_page_y2016m08 (
+  CHECK (creation_datetime >= '2016-08-01' AND creation_datetime < '2016-09-01')
+) INHERITS (stats_page);
+
+CREATE TABLE stats_page_y2016m09 (
+  CHECK (creation_datetime >= '2016-09-01' AND creation_datetime < '2016-10-01')
+) INHERITS (stats_page);
+
+CREATE TABLE stats_page_y2016m10 (
+  CHECK (creation_datetime >= '2016-10-01' AND creation_datetime < '2016-11-01')
+) INHERITS (stats_page);
+
+CREATE TABLE stats_page_y2016m11 (
+  CHECK (creation_datetime >= '2016-11-01' AND creation_datetime < '2016-12-01')
+) INHERITS (stats_page);
+
+CREATE TABLE stats_page_y2016m12 (
+  CHECK (creation_datetime >= '2016-12-01' AND creation_datetime < '2017-01-01')
+) INHERITS (stats_page);
 
 CREATE INDEX index_creation_datetime_stats_page ON stats_page(creation_datetime,date_type);
 CREATE INDEX index_url_type_stats_page ON stats_page(url_type);
