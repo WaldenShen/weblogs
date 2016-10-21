@@ -6,7 +6,11 @@ FILEPATH_APP="${BASEPATH}/../app"
 MODULE_CLICKSTREAM=clickstream
 MODULE_DUMP=dump
 
-today=$(date +%Y-%m-%d)
+FILEPATH_SPARK="/cms/tagging"
+MODULE_ETL="${FILEPATH_SPARK}/etl.sh"
+MODULE_RECOMMENDER="${FILEPATH_SPARK}/recommender.sh"
+
+today=$(date "--date=-1 day" +%Y-%m-%d)
 
 # export PYTHONPATH
 export PYTHONPATH=$PYTHONPATH:./
@@ -30,3 +34,7 @@ luigi --module ${MODULE_CLICKSTREAM} ${MODULE_CLICKSTREAM}.RDBTask --interval ${
 luigi --module ${MODULE_CLICKSTREAM} ${MODULE_CLICKSTREAM}.CMSTask --interval ${today} --workers 3
 
 wait
+
+# Spark Task
+$(${MODULE_ETL})
+$(${MODULE_RECOMMENDER})
