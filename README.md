@@ -19,7 +19,7 @@ service postgresql start
 luigi --module clickstream clickstream.RawTask --interval 2016-09-01-2016-10-01 --mode range --workers 8
 
 # Start the sequence task
-luigi --module clickstream clickstream.SequenceTask --workers 1  # Cannot execute by multiple workers
+luigi --module clickstream clickstream.SequenceTask --interval 2016-09-01-2016-10-01 --workers 1  # Cannot execute by multiple workers
 
 # Start the advanced task
 luigi --module clickstream clickstream.AdvancedTask --interval 2016-09-01-2016-10-01 --mode range --workers 8
