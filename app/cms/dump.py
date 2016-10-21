@@ -104,7 +104,7 @@ class DumpAllTask(luigi.Task):
         '''
 
     def run(self):
-        for src, det in self.ofiles():
+        for src, det in self.ofiles:
             if os.path.exists(det):
                 os.remove(det)
 
